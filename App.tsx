@@ -19,6 +19,7 @@ import Login from './components/Login';
 import Management from './components/Management';
 import PasswordChange from './components/PasswordChange';
 import UserPasswordChangeModal from './components/UserPasswordChangeModal';
+import AiAssistant from './components/AiAssistant';
 
 
 import ChartBarIcon from './components/icons/ChartBarIcon';
@@ -89,10 +90,19 @@ const App: React.FC = () => {
     
     const [currentUser, setCurrentUser] = useState<User | null>(() => {
         const storedUser = sessionStorage.getItem('currentUser');
-        return storedUser ? JSON.parse(storedUser) : null;
+        try {
+            return storedUser ? JSON.parse(storedUser) : null;
+        } catch {
+            return null;
+        }
     });
 
     const salespersonImportRef = useRef<HTMLInputElement>(null);
+
+    const handleLogout = useCallback(() => {
+        sessionStorage.removeItem('currentUser');
+        setCurrentUser(null);
+    }, []);
 
     // Fix for ensuring admin password from constants is always respected over stale localStorage
     useEffect(() => {
@@ -124,6 +134,16 @@ const App: React.FC = () => {
             setRequiresPasswordChange(false);
         }
     }, [currentUser]);
+
+    // STARTUP BUG FIX: Validate user session on initial load.
+    useEffect(() => {
+        // This prevents errors if an admin has deleted the user, but their session persists.
+        if (currentUser && !users.some(u => u.id === currentUser.id)) {
+            console.warn(`Stale user session found for ID ${currentUser.id}. Logging out.`);
+            handleLogout();
+        }
+    }, []); // Empty dependency array ensures this runs only once on mount.
+
 
     const setAuth = (user: User | null) => {
         if (user) {
@@ -193,8 +213,6 @@ const App: React.FC = () => {
         }
         return false;
     };
-
-    const handleLogout = () => setAuth(null);
 
     const changeUserPassword = (userId: string, newPassword: string) => {
         let updatedUser: User | null = null;
@@ -760,7 +778,7 @@ const App: React.FC = () => {
     }
 
     if (requiresPasswordChange) {
-        return <PasswordChange user={currentUser} onChangePassword={changeUserPassword} onLogout={handleLogout} />;
+        return <PasswordChange user={currentUser} onChangePassword={changeUserPassword} onLogout={() => handleLogout()} />;
     }
 
     return (
@@ -804,20 +822,28 @@ const App: React.FC = () => {
                         <button onClick={() => setIsPasswordChangeModalOpen(true)} className={`${inactiveClassName} w-full`}>
                             <KeyIcon className="h-5 w-5" /><span>Cambiar Contraseña</span>
                         </button>
-                        <button onClick={handleLogout} className={`${inactiveClassName} w-full`}>
+                        <button onClick={() => handleLogout()} className={`${inactiveClassName} w-full`}>
                             <LogoutIcon className="h-5 w-5" /><span>Cerrar Sesión</span>
                         </button>
                     </div>
                 </aside>
                 <div className="flex-1 flex flex-col overflow-hidden">
-                     <header className="md:hidden bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 p-2 sm:p-4 flex items-center justify-between">
-                        <button onClick={() => setIsMobileMenuOpen(true)} className="p-2" aria-label="Open menu"><MenuIcon className="h-6 w-6 text-white"/></button>
-                         <div className="flex items-center space-x-2">
-                            <svg className="h-7 w-7 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span className="text-lg font-bold text-white">Black Medical</span>
+                    <header className="bg-slate-800/80 backdrop-blur-sm border-b border-slate-700/50 p-2 sm:p-3 flex items-center justify-between flex-shrink-0">
+                        <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 md:hidden" aria-label="Open menu">
+                            <MenuIcon className="h-6 w-6 text-white"/>
+                        </button>
+                        
+                        <div className="hidden md:flex items-center space-x-2 ml-2">
+                            <span className="text-slate-400">Bienvenido,</span>
+                            <span className="text-white font-semibold">{currentUser.name}</span>
                         </div>
-                        <button onClick={() => setIsGlobalSearchOpen(true)} className="p-2" aria-label="Open search">
-                            <SearchIcon className="h-6 w-6 text-white" />
+                        
+                        <div className="flex items-center space-x-2 md:hidden">
+                            {/* This space is intentionally left for mobile layout balance, could add a logo here if needed */}
+                        </div>
+
+                        <button onClick={() => setIsGlobalSearchOpen(true)} className="p-2 text-white hover:bg-slate-700 rounded-full" aria-label="Abrir Búsqueda Global">
+                            <SearchIcon className="h-6 w-6" />
                         </button>
                     </header>
                     <main className="flex-1 overflow-y-auto">
@@ -847,13 +873,18 @@ const App: React.FC = () => {
                     </main>
                 </div>
             </div>
-             <button
-                onClick={() => setIsGlobalSearchOpen(true)}
-                className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-cyan-500 hover:bg-cyan-600 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-lg flex items-center justify-center transform transition-transform hover:scale-110 z-50"
-                aria-label="Abrir Búsqueda Global"
-            >
-                <SearchIcon className="h-7 w-7 sm:h-8 sm:w-8" />
-            </button>
+            <AiAssistant
+                currentUser={currentUser}
+                clients={mainClients}
+                products={mainProducts}
+                leads={mainLeads}
+                opportunities={mainOpportunities}
+                tasks={mainTasks}
+                supportTickets={mainSupportTickets}
+                salespeople={mainSalespeople}
+                interactions={mainInteractions}
+                hasPendingTasks={hasPendingTasks}
+            />
             <GlobalSearch
                 isOpen={isGlobalSearchOpen}
                 onClose={() => setIsGlobalSearchOpen(false)}
