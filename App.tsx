@@ -19,7 +19,6 @@ import Login from './components/Login';
 import Management from './components/Management';
 import PasswordChange from './components/PasswordChange';
 import UserPasswordChangeModal from './components/UserPasswordChangeModal';
-import AiAssistant from './components/AiAssistant';
 
 
 import ChartBarIcon from './components/icons/ChartBarIcon';
@@ -522,11 +521,11 @@ const App: React.FC = () => {
         );
     }, []);
     
-    const addOpportunity = useCallback((oppData: Omit<Opportunity, 'id' | 'clientName'>, explicitClientName?: string) => {
+    const addOpportunity = useCallback((oppData: Omit<Opportunity, 'id' | 'clientName'>, explicitClientName?: string): Opportunity | null => {
         const clientName = explicitClientName || mainClients.find(c => c.id === oppData.clientId)?.name;
         if (!clientName) {
             console.error("Client name could not be determined for opportunity.");
-            return;
+            return null;
         };
 
         const opportunityId = `opp-${Date.now()}`;
@@ -552,6 +551,7 @@ const App: React.FC = () => {
             associatedName: newOpportunity.clientName,
         };
         setMainTasks(prev => [newOpportunityTask, ...prev]);
+        return newOpportunity;
     }, [currentUser, mainClients]);
 
     const updateOpportunity = useCallback((updatedOpportunity: Opportunity) => {
@@ -734,13 +734,13 @@ const App: React.FC = () => {
     const convertLeadToOpportunity = useCallback((
         leadId: string, 
         opportunityData: { products: OpportunityProduct[], closeDate: string, stage: OpportunityStage, salespersonId: string }
-    ) => {
+    ): Opportunity | null => {
         const lead = mainLeads.find(l => l.id === leadId);
-        if (!lead) return;
+        if (!lead) return null;
         
         const value = opportunityData.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
 
-        addOpportunity({
+        const newOpp = addOpportunity({
             products: opportunityData.products,
             closeDate: opportunityData.closeDate,
             salespersonId: opportunityData.salespersonId,
@@ -749,14 +749,13 @@ const App: React.FC = () => {
             originalLeadId: leadId,
         }, lead.company);
 
-        updateLead({ ...lead, status: LeadStatus.CALIFICADO });
+        if (newOpp) {
+            updateLead({ ...lead, status: LeadStatus.CALIFICADO });
+        }
+        
+        return newOpp;
     }, [addOpportunity, updateLead, mainLeads]);
     
-    const hasPendingTasks = useMemo(() => {
-        const today = new Date().toISOString().split('T')[0];
-        return data.tasks.some(task => task.status !== TaskStatus.COMPLETADA && task.dueDate >= today);
-    }, [data.tasks]);
-
     const navLinkClasses = "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors";
     const activeClassName = `${navLinkClasses} bg-slate-700 text-white`;
     const inactiveClassName = `${navLinkClasses} text-slate-400 hover:bg-slate-700/50 hover:text-white`;
@@ -842,9 +841,6 @@ const App: React.FC = () => {
                             {/* This space is intentionally left for mobile layout balance, could add a logo here if needed */}
                         </div>
 
-                        <button onClick={() => setIsGlobalSearchOpen(true)} className="p-2 text-white hover:bg-slate-700 rounded-full" aria-label="Abrir Búsqueda Global">
-                            <SearchIcon className="h-6 w-6" />
-                        </button>
                     </header>
                     <main className="flex-1 overflow-y-auto">
                         <ReactRouterDOM.Routes>
@@ -873,18 +869,13 @@ const App: React.FC = () => {
                     </main>
                 </div>
             </div>
-            <AiAssistant
-                currentUser={currentUser}
-                clients={mainClients}
-                products={mainProducts}
-                leads={mainLeads}
-                opportunities={mainOpportunities}
-                tasks={mainTasks}
-                supportTickets={mainSupportTickets}
-                salespeople={mainSalespeople}
-                interactions={mainInteractions}
-                hasPendingTasks={hasPendingTasks}
-            />
+             <button
+                onClick={() => setIsGlobalSearchOpen(true)}
+                className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-cyan-500 hover:bg-cyan-600 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-lg flex items-center justify-center transform transition-transform hover:scale-110 z-50"
+                aria-label="Abrir Búsqueda Global"
+            >
+                <SearchIcon className="h-7 w-7 sm:h-8 sm:h-8" />
+            </button>
             <GlobalSearch
                 isOpen={isGlobalSearchOpen}
                 onClose={() => setIsGlobalSearchOpen(false)}

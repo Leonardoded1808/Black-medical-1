@@ -17,7 +17,7 @@ interface OpportunitiesProps {
     products: Product[];
     salespeople: Salesperson[];
     interactions: Interaction[];
-    addOpportunity: (opportunity: Omit<Opportunity, 'id' | 'clientName'>, explicitClientName?: string) => void;
+    addOpportunity: (opportunity: Omit<Opportunity, 'id' | 'clientName'>, explicitClientName?: string) => Opportunity | null;
     updateOpportunity: (opportunity: Opportunity) => void;
     deleteOpportunity: (opportunityId: string) => void;
     addInteraction: (interaction: Omit<Interaction, 'id' | 'date'>) => void;

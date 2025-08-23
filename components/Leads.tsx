@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Lead, Salesperson, Interaction, Product, OpportunityProduct, User, Opportunity } from '../types';
@@ -22,7 +23,7 @@ interface ListadoProps {
     addInteraction: (interaction: Omit<Interaction, 'id' | 'date'>) => void;
     updateInteraction: (interaction: Interaction) => void;
     deleteInteraction: (interactionId: string) => void;
-    convertLeadToOpportunity: (leadId: string, opportunityData: { products: OpportunityProduct[], closeDate: string, stage: OpportunityStage, salespersonId: string }) => void;
+    convertLeadToOpportunity: (leadId: string, opportunityData: { products: OpportunityProduct[], closeDate: string, stage: OpportunityStage, salespersonId: string }) => Opportunity | null;
 }
 
 const statusColors: Record<LeadStatus, string> = {
@@ -181,12 +182,17 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
         if (!selectedLead || opportunityProducts.length === 0 || !oppDetails.closeDate) {
             return alert("Por favor, complete todos los campos de la oportunidad.");
         }
-        convertLeadToOpportunity(selectedLead.id, {
+        const newOpportunity = convertLeadToOpportunity(selectedLead.id, {
             ...oppDetails,
             products: [...opportunityProducts],
             salespersonId: selectedLead.salespersonId
         });
         handleCloseConvertModal();
+        if (newOpportunity) {
+            navigate(`/opportunities#${newOpportunity.id}`);
+        } else {
+            alert("Error al convertir el prospecto. Por favor, inténtelo de nuevo.");
+        }
     };
 
     const handleDeleteClick = (leadId: string) => {
