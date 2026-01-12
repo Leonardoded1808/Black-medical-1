@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import type { Lead, Salesperson, Interaction, Opportunity } from '../types';
@@ -77,7 +78,16 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
     
     const leadsBySourceData = useMemo(() => Object.entries(
         filteredLeads.reduce((acc, lead) => {
-            acc[lead.source] = (acc[lead.source] || 0) + 1;
+            const source = lead.source || 'Sin interés';
+            acc[source] = (acc[source] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>)
+    ).map(([name, value]) => ({ name, value })), [filteredLeads]);
+
+    const leadsByOriginData = useMemo(() => Object.entries(
+        filteredLeads.reduce((acc, lead) => {
+            const origin = lead.origin || 'Desconocido';
+            acc[origin] = (acc[origin] || 0) + 1;
             return acc;
         }, {} as Record<string, number>)
     ).map(([name, value]) => ({ name, value })), [filteredLeads]);
@@ -189,7 +199,7 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
                     </ResponsiveContainer>
                 </div>
                 <div className="lg:col-span-2 bg-slate-800 p-4 sm:p-6 rounded-lg">
-                    <h2 className="text-xl font-semibold mb-4 text-slate-200">Prospectos por Origen <span className="text-base font-normal text-slate-400">{titleSuffix}</span></h2>
+                    <h2 className="text-xl font-semibold mb-4 text-slate-200">Prospectos por Interés <span className="text-base font-normal text-slate-400">{titleSuffix}</span></h2>
                     <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                             <Pie
@@ -227,6 +237,44 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-slate-800 p-4 sm:p-6 rounded-lg">
                     <h2 className="text-xl font-semibold mb-4 text-slate-200 flex items-center gap-2">
+                        <TagIcon className="h-5 w-5 text-teal-400" />
+                        Prospectos por Origen <span className="text-base font-normal text-slate-400">{titleSuffix}</span>
+                    </h2>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                            <Pie
+                                data={leadsByOriginData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                outerRadius={100}
+                                fill="#8884d8"
+                                dataKey="value"
+                                nameKey="name"
+                                label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+                                    if (percent === 0) return null;
+                                    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                    const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+                                    const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+                                    return (
+                                        <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="14">
+                                            {`${(percent * 100).toFixed(0)}%`}
+                                        </text>
+                                    );
+                                }}
+                            >
+                                {leadsByOriginData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '0.5rem' }}/>
+                            <Legend wrapperStyle={{fontSize: "14px", paddingTop: "20px"}}/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+
+                <div className="bg-slate-800 p-4 sm:p-6 rounded-lg">
+                    <h2 className="text-xl font-semibold mb-4 text-slate-200 flex items-center gap-2">
                         <BriefcaseIcon className="h-5 w-5 text-purple-400" />
                         Oportunidades por Vendedor <span className="text-base font-normal text-slate-400">{titleSuffix}</span>
                     </h2>
@@ -242,7 +290,9 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
+            </div>
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                  <div className="bg-slate-800 p-4 sm:p-6 rounded-lg">
                     <h2 className="text-xl font-semibold mb-4 text-slate-200 flex items-center gap-2">
                         <UserGroupIcon className="h-5 w-5 text-blue-400" />
@@ -260,9 +310,7 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-            </div>
 
-            <div className="grid grid-cols-1 gap-8">
                 <div className="bg-slate-800 p-4 sm:p-6 rounded-lg">
                      <h2 className="text-xl font-semibold mb-4 text-slate-200 flex items-center gap-2">
                         <AnnotationIcon className="h-5 w-5 text-cyan-400" />

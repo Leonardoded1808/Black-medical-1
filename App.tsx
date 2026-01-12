@@ -1,9 +1,8 @@
 
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { DUMMY_CLIENTS, DUMMY_LEADS, DUMMY_PRODUCTS, DUMMY_TASKS, DUMMY_SUPPORT_TICKETS, DUMMY_SALESPEOPLE, DUMMY_INTERACTIONS, DUMMY_OPPORTUNITIES, DUMMY_USERS } from './constants';
-import type { Client, Lead, Product, Task, SupportTicket, Salesperson, Interaction, Opportunity, OpportunityProduct, User, BackupData } from './types';
+import { DUMMY_CLIENTS, DUMMY_LEADS, DUMMY_PRODUCTS, DUMMY_TASKS, DUMMY_SUPPORT_TICKETS, DUMMY_SALESPEOPLE, DUMMY_INTERACTIONS, DUMMY_OPPORTUNITIES, DUMMY_USERS, DUMMY_WHATSAPP_TEMPLATES } from './constants';
+import type { Client, Lead, Product, Task, SupportTicket, Salesperson, Interaction, Opportunity, OpportunityProduct, User, BackupData, WhatsAppTemplate } from './types';
 import { LeadStatus, OpportunityStage, TaskStatus } from './types';
 
 import Panel from './components/Dashboard';
@@ -14,6 +13,7 @@ import Salespeople from './components/Salespeople';
 import Products from './components/Products';
 import Agenda from './components/Agenda';
 import Support from './components/Support';
+import WhatsAppTemplates from './components/WhatsAppTemplates';
 import GlobalSearch from './components/GlobalSearch';
 import Login from './components/Login';
 import Management from './components/Management';
@@ -37,6 +37,7 @@ import CogIcon from './components/icons/CogIcon';
 import KeyIcon from './components/icons/KeyIcon';
 import UploadIcon from './components/icons/UploadIcon';
 import SearchIcon from './components/icons/SearchIcon';
+import ChatBubbleBottomCenterTextIcon from './components/icons/ChatBubbleBottomCenterTextIcon';
 
 
 // Custom hook to manage state in localStorage
@@ -80,6 +81,7 @@ const App: React.FC = () => {
     const [mainSupportTickets, setMainSupportTickets] = useLocalStorage<SupportTicket[]>('crm_main_support_tickets', DUMMY_SUPPORT_TICKETS);
     const [mainSalespeople, setMainSalespeople] = useLocalStorage<Salesperson[]>('crm_main_salespeople', DUMMY_SALESPEOPLE);
     const [mainInteractions, setMainInteractions] = useLocalStorage<Interaction[]>('crm_main_interactions', DUMMY_INTERACTIONS);
+    const [mainWhatsAppTemplates, setMainWhatsAppTemplates] = useLocalStorage<WhatsAppTemplate[]>('crm_main_whatsapp_templates', DUMMY_WHATSAPP_TEMPLATES);
     const [users, setUsers] = useLocalStorage<User[]>('crm_users', DUMMY_USERS);
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -168,6 +170,7 @@ const App: React.FC = () => {
                 supportTickets: mainSupportTickets,
                 salespeople: mainSalespeople,
                 interactions: mainInteractions,
+                whatsappTemplates: mainWhatsAppTemplates,
             };
         }
 
@@ -191,6 +194,7 @@ const App: React.FC = () => {
             clients: mainClients, 
             products: mainProducts,
             salespeople: mainSalespeople,
+            whatsappTemplates: mainWhatsAppTemplates,
             
             // Data filtered for the current salesperson
             leads: salespersonLeads,
@@ -201,7 +205,7 @@ const App: React.FC = () => {
             // Pass all interactions so components can resolve relationships (e.g., lead -> opportunity)
             interactions: mainInteractions,
         };
-    }, [currentUser, mainClients, mainLeads, mainProducts, mainOpportunities, mainTasks, mainSupportTickets, mainSalespeople, mainInteractions]);
+    }, [currentUser, mainClients, mainLeads, mainProducts, mainOpportunities, mainTasks, mainSupportTickets, mainSalespeople, mainInteractions, mainWhatsAppTemplates]);
     
 
     const handleLogin = (userId: string, pass: string): boolean => {
@@ -270,6 +274,7 @@ const App: React.FC = () => {
             supportTickets: mainSupportTickets,
             salespeople: mainSalespeople,
             interactions: mainInteractions,
+            whatsappTemplates: mainWhatsAppTemplates,
             users: users,
         };
 
@@ -293,6 +298,7 @@ const App: React.FC = () => {
             setMainSupportTickets(data.supportTickets || []);
             setMainSalespeople(data.salespeople || []);
             setMainInteractions(data.interactions || []);
+            setMainWhatsAppTemplates(data.whatsappTemplates || []);
             setUsers(data.users || []);
             alert('La restauración del backup se ha completado con éxito. La página se recargará ahora.');
             window.location.reload();
@@ -350,6 +356,7 @@ const App: React.FC = () => {
             ),
             supportTickets: mainSupportTickets.filter(st => assignedClientIds.has(st.clientId!)),
             salespeople: mainSalespeople, // All salespeople for context
+            whatsappTemplates: mainWhatsAppTemplates,
         };
 
         const jsonString = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(salespersonData, null, 2))}`;
@@ -390,6 +397,7 @@ const App: React.FC = () => {
                 setMainSupportTickets(data.supportTickets);
                 setMainSalespeople(data.salespeople);
                 setMainInteractions(data.interactions);
+                setMainWhatsAppTemplates(data.whatsappTemplates || []);
 
                 alert('Los datos del administrador han sido importados y actualizados correctamente.');
 
@@ -417,6 +425,7 @@ const App: React.FC = () => {
             supportTickets: data.supportTickets,
             salespeople: data.salespeople,
             interactions: data.interactions,
+            whatsappTemplates: data.whatsappTemplates,
             sourceSalespersonId: currentUser.id,
         };
         const jsonString = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backupData, null, 2))}`;
@@ -449,7 +458,7 @@ const App: React.FC = () => {
 
     // --- Memoized CRUD Functions ---
     const addClient = useCallback((clientData: Omit<Client, 'id'>) => {
-        const newClient: Client = { ...clientData, id: `cli-${Date.now()}` };
+        const newClient: Client = { ...clientData, id: `cli-${Date.now()}`, createdAt: new Date().toISOString() };
         setMainClients(prev => [newClient, ...prev]);
         return newClient;
     }, []);
@@ -484,7 +493,7 @@ const App: React.FC = () => {
     }, [mainClients, mainLeads, mainOpportunities]);
 
     const addLead = useCallback((leadData: Omit<Lead, 'id'>) => {
-        const newLead: Lead = { ...leadData, id: `lead-${Date.now()}`, salespersonId: leadData.salespersonId || currentUser?.id || '' };
+        const newLead: Lead = { ...leadData, id: `lead-${Date.now()}`, salespersonId: leadData.salespersonId || currentUser?.id || '', createdAt: new Date().toISOString() };
         setMainLeads(prev => [newLead, ...prev]);
     }, [currentUser]);
 
@@ -535,6 +544,7 @@ const App: React.FC = () => {
             id: opportunityId,
             clientName: clientName,
             salespersonId: oppData.salespersonId || currentUser?.id || '',
+            createdAt: new Date().toISOString(),
         };
         setMainOpportunities(prev => [newOpportunity, ...prev]);
         
@@ -731,6 +741,19 @@ const App: React.FC = () => {
         setMainInteractions(prev => prev.map(i => i.salespersonId === salespersonId ? { ...i, salespersonId: adminId } : i));
     }, []);
 
+    const addWhatsAppTemplate = useCallback((templateData: Omit<WhatsAppTemplate, 'id'>) => {
+        const newTemplate: WhatsAppTemplate = { ...templateData, id: `tmpl-${Date.now()}` };
+        setMainWhatsAppTemplates(prev => [newTemplate, ...prev]);
+    }, []);
+
+    const updateWhatsAppTemplate = useCallback((updatedTemplate: WhatsAppTemplate) => {
+        setMainWhatsAppTemplates(prev => prev.map(t => t.id === updatedTemplate.id ? updatedTemplate : t));
+    }, []);
+
+    const deleteWhatsAppTemplate = useCallback((templateId: string) => {
+        setMainWhatsAppTemplates(prev => prev.filter(t => t.id !== templateId));
+    }, []);
+
     const convertLeadToOpportunity = useCallback((
         leadId: string, 
         opportunityData: { products: OpportunityProduct[], closeDate: string, stage: OpportunityStage, salespersonId: string }
@@ -768,6 +791,7 @@ const App: React.FC = () => {
         { path: "/salespeople", icon: <UserIcon className="h-5 w-5" />, label: "Vendedores", adminOnly: true },
         { path: "/products", icon: <CubeIcon className="h-5 w-5" />, label: "Productos" },
         { path: "/agenda", icon: <CalendarIcon className="h-5 w-5" />, label: "Agenda" },
+        { path: "/whatsapp-prompts", icon: <ChatBubbleBottomCenterTextIcon className="h-5 w-5" />, label: "WhatsApp Prompts" },
         { path: "/support", icon: <WrenchScrewdriverIcon className="h-5 w-5" />, label: "Soporte" },
         { path: "/management", icon: <CogIcon className="h-5 w-5" />, label: "Gestión", adminOnly: true },
     ].filter(item => currentUser?.role === 'admin' || !item.adminOnly);
@@ -847,11 +871,12 @@ const App: React.FC = () => {
                             <ReactRouterDOM.Route path="/" element={<ReactRouterDOM.Navigate to="/panel" />} />
                             <ReactRouterDOM.Route path="/panel" element={<Panel clientsCount={data.clients.length} leadsCount={data.leads.length} salespeopleCount={data.salespeople.length} productsCount={data.products.length} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} opportunities={data.opportunities} />}/>
                             <ReactRouterDOM.Route path="/clients" element={<Clients clients={data.clients} updateClient={updateClient} deleteClient={deleteClient} opportunities={data.opportunities} salespeople={data.salespeople} />} />
-                            <ReactRouterDOM.Route path="/listado" element={<Listado user={currentUser} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} products={data.products} opportunities={data.opportunities} addLead={addLead} updateLead={updateLead} deleteLead={deleteLead} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} convertLeadToOpportunity={convertLeadToOpportunity} />} />
+                            <ReactRouterDOM.Route path="/listado" element={<Listado user={currentUser} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} products={data.products} opportunities={data.opportunities} addLead={addLead} updateLead={updateLead} deleteLead={deleteLead} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} convertLeadToOpportunity={convertLeadToOpportunity} whatsappTemplates={data.whatsappTemplates} />} />
                             <ReactRouterDOM.Route path="/opportunities" element={<Opportunities user={currentUser} opportunities={data.opportunities} clients={data.clients} products={data.products} salespeople={data.salespeople} addOpportunity={addOpportunity} updateOpportunity={updateOpportunity} deleteOpportunity={deleteOpportunity} interactions={data.interactions} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} leads={data.leads} />} />
                             <ReactRouterDOM.Route path="/salespeople" element={<Salespeople salespeople={data.salespeople} leads={data.leads} tasks={data.tasks} addSalesperson={addSalesperson} updateSalesperson={updateSalesperson} deleteSalesperson={deleteSalesperson} />} />
                             <ReactRouterDOM.Route path="/products" element={<Products products={data.products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={deleteProduct} />} />
                             <ReactRouterDOM.Route path="/agenda" element={<Agenda user={currentUser} tasks={data.tasks} clients={data.clients} leads={data.leads} opportunities={data.opportunities} salespeople={data.salespeople} addTask={addTask} updateTask={updateTask} deleteTask={deleteTask} />} />
+                            <ReactRouterDOM.Route path="/whatsapp-prompts" element={<WhatsAppTemplates templates={data.whatsappTemplates} addTemplate={addWhatsAppTemplate} updateTemplate={updateWhatsAppTemplate} deleteTemplate={deleteWhatsAppTemplate} />} />
                             <ReactRouterDOM.Route path="/support" element={<Support tickets={data.supportTickets} clients={data.clients} addTicket={addTicket} updateTicket={updateTicket} deleteTicket={deleteTicket} />} />
                             <ReactRouterDOM.Route 
                                 path="/management" 
@@ -883,6 +908,10 @@ const App: React.FC = () => {
                 leads={mainLeads}
                 opportunities={mainOpportunities}
                 tasks={mainTasks}
+                products={mainProducts}
+                supportTickets={mainSupportTickets}
+                interactions={mainInteractions}
+                salespeople={mainSalespeople}
             />
             {isPasswordChangeModalOpen && currentUser && (
                 <UserPasswordChangeModal

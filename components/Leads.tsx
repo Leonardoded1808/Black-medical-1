@@ -1,14 +1,14 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import type { Lead, Salesperson, Interaction, Product, OpportunityProduct, User, Opportunity } from '../types';
+import type { Lead, Salesperson, Interaction, Product, OpportunityProduct, User, Opportunity, WhatsAppTemplate } from '../types';
 import { LeadStatus, InteractionType, OpportunityStage } from '../types';
 import ChatBubbleLeftRightIcon from './icons/ChatBubbleLeftRightIcon';
 import PencilIcon from './icons/PencilIcon';
 import TrashIcon from './icons/TrashIcon';
 import CurrencyDollarIcon from './icons/CurrencyDollarIcon';
 import ConfirmationModal from './ConfirmationModal';
+import WhatsAppProductModal from './WhatsAppProductModal';
 
 interface ListadoProps {
     user: User;
@@ -17,6 +17,7 @@ interface ListadoProps {
     interactions: Interaction[];
     products: Product[];
     opportunities: Opportunity[];
+    whatsappTemplates: WhatsAppTemplate[];
     addLead: (lead: Omit<Lead, 'id'>) => void;
     updateLead: (lead: Lead) => void;
     deleteLead: (leadId: string) => void;
@@ -33,17 +34,29 @@ const statusColors: Record<LeadStatus, string> = {
     [LeadStatus.PERDIDO]: 'bg-red-500/20 text-red-300',
 };
 
-const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interactions, products, opportunities, addLead, updateLead, deleteLead, addInteraction, updateInteraction, deleteInteraction, convertLeadToOpportunity }) => {
+const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interactions, products, opportunities, whatsappTemplates, addLead, updateLead, deleteLead, addInteraction, updateInteraction, deleteInteraction, convertLeadToOpportunity }) => {
     const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
     const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
     const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+    
     const [leadToDeleteId, setLeadToDeleteId] = useState<string | null>(null);
     
     const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
     const [editingLead, setEditingLead] = useState<Lead | null>(null);
+    const [whatsappLead, setWhatsappLead] = useState<Lead | null>(null);
     
-    const initialLeadState: Omit<Lead, 'id'> = { name: '', company: '', email: '', phone: '', source: '', status: LeadStatus.NUEVO, salespersonId: user.role === 'salesperson' ? user.id : '' };
+    const initialLeadState: Omit<Lead, 'id'> = { 
+        name: '', 
+        company: '', 
+        email: '', 
+        phone: '', 
+        source: '', 
+        origin: 'Instagram', 
+        status: LeadStatus.NUEVO, 
+        salespersonId: user.role === 'salesperson' ? user.id : 'ADM' 
+    };
     const [leadFormData, setLeadFormData] = useState<Omit<Lead, 'id'>>(initialLeadState);
 
     const initialInteractionState = { type: InteractionType.LLAMADA, notes: '', salespersonId: '' };
@@ -58,25 +71,28 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
     
     const [newOppProduct, setNewOppProduct] = useState({ productId: '', quantity: 1 });
 
-    const [interactionFilter, setInteractionFilter] = useState('all');
+    const [sortBy, setSortBy] = useState<'alpha' | 'recent'>('alpha');
     
     const location = useLocation();
     const navigate = useNavigate();
 
-    const filteredLeads = useMemo(() => {
-        if (interactionFilter === 'all') {
-            return leads;
-        }
-        const now = new Date();
-        const daysToSubtract = parseInt(interactionFilter, 10);
-        const filterDate = new Date();
-        filterDate.setDate(now.getDate() - daysToSubtract);
-        filterDate.setHours(0, 0, 0, 0);
+    const formatWhatsAppLink = (phone: string) => {
+        const cleanPhone = phone.replace(/\D/g, '');
+        return `https://wa.me/${cleanPhone}`;
+    };
 
-        return leads.filter(lead => 
-            lead.lastInteractionDate && new Date(lead.lastInteractionDate) >= filterDate
-        );
-    }, [leads, interactionFilter]);
+    const sortedLeads = useMemo(() => {
+        const list = [...leads];
+        if (sortBy === 'alpha') {
+            return list.sort((a, b) => a.name.localeCompare(b.name));
+        } else {
+            return list.sort((a, b) => {
+                const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return dateB - dateA;
+            });
+        }
+    }, [leads, sortBy]);
 
     useEffect(() => {
         if (location.hash) {
@@ -150,6 +166,28 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
         setIsConvertModalOpen(false);
         setOpportunityProducts([]);
         setOppDetails({ closeDate: '', stage: OpportunityStage.PROSPECCION });
+    };
+
+    const handleOpenWhatsAppModal = (lead: Lead) => {
+        setWhatsappLead(lead);
+        setIsWhatsAppModalOpen(true);
+    };
+
+    const handleCloseWhatsAppModal = () => {
+        setWhatsappLead(null);
+        setIsWhatsAppModalOpen(false);
+    };
+
+    const handleWhatsAppSent = (productId: string, message: string) => {
+        if (whatsappLead) {
+            const product = products.find(p => p.id === productId);
+            addInteraction({
+                leadId: whatsappLead.id,
+                salespersonId: whatsappLead.salespersonId,
+                type: InteractionType.MENSAJE,
+                notes: `Enviado WhatsApp con información del producto: ${product?.name}. \n\nContenido: ${message.substring(0, 50)}...`,
+            });
+        }
     };
 
     const handleLeadSubmit = (e: React.FormEvent) => {
@@ -235,7 +273,10 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
         setNewInteraction(initialInteractionState);
     };
 
-    const getSalespersonName = (salespersonId: string) => salespeople.find(sp => sp.id === salespersonId)?.name || 'No asignado';
+    const getSalespersonName = (salespersonId: string) => {
+        if (salespersonId === 'ADM') return 'Administrador';
+        return salespeople.find(sp => sp.id === salespersonId)?.name || 'No asignado';
+    };
     
     const getLeadInteractions = (leadId: string) => {
         const correspondingOpportunity = opportunities.find(o => o.originalLeadId === leadId);
@@ -253,33 +294,29 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
             <div className="p-4 sm:p-6 md:p-8 text-white">
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Listado de Prospectos</h1>
-                    <button onClick={() => handleOpenLeadModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
-                        <span>+ Nuevo Prospecto</span>
-                    </button>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                        <div className="flex items-center gap-3 bg-slate-800 p-1.5 rounded-lg border border-slate-700 self-start sm:self-center">
+                            <span className="text-sm text-slate-400 ml-2 hidden sm:inline">Ordenar por:</span>
+                            <button 
+                                onClick={() => setSortBy('alpha')}
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'alpha' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                A-Z
+                            </button>
+                            <button 
+                                onClick={() => setSortBy('recent')}
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'recent' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Recientes
+                            </button>
+                        </div>
+                        <button onClick={() => handleOpenLeadModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
+                            <span>+ Nuevo Prospecto</span>
+                        </button>
+                    </div>
                 </div>
                  
-                 <div className="flex flex-wrap items-center justify-start gap-2 mb-6">
-                    {
-                      [
-                        {key: 'all', label: 'Todos'},
-                        {key: '7', label: 'Interactuado en 7 Días'},
-                        {key: '30', label: 'Interactuado en 30 Días'},
-                        {key: '90', label: 'Interactuado en 90 Días'},
-                      ].map(({key, label}) => (
-                      <button
-                        key={key}
-                        onClick={() => setInteractionFilter(key)}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                          interactionFilter === key
-                            ? 'bg-cyan-500 text-white shadow-lg'
-                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
                  <div className="bg-slate-800 rounded-lg shadow-lg overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-left text-sm">
@@ -294,16 +331,24 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700">
-                                {filteredLeads.map(lead => (
+                                {sortedLeads.map(lead => (
                                     <tr key={lead.id} id={lead.id} className="hover:bg-slate-700/50 transition-colors block md:table-row mb-2 md:mb-0 bg-slate-800 md:bg-transparent rounded-lg md:rounded-none">
                                         <td className="p-4 font-medium text-slate-100 block md:table-cell" data-label="Nombre: ">
                                             <p>{lead.name}</p>
                                             <a href={`mailto:${lead.email}`} className="text-cyan-400 hover:text-cyan-300 text-xs">{lead.email}</a>
                                         </td>
-                                        <td className="p-4 text-slate-300 block md:table-cell" data-label="Empresa: ">{lead.company}</td>
+                                        <td className="p-4 text-slate-300 block md:table-cell" data-label="Empresa: ">{lead.company || <span className="text-slate-500 italic">No registrada</span>}</td>
                                         <td className="p-4 text-slate-300 block md:table-cell" data-label="Teléfono: ">
                                           {lead.phone ? (
-                                             <a href={`tel:${lead.phone}`} className="text-cyan-400 hover:text-cyan-300">{lead.phone}</a>
+                                             <a 
+                                                href={formatWhatsAppLink(lead.phone)} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="flex items-center gap-1.5 text-green-400 hover:text-green-300 group"
+                                             >
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                                <span className="group-hover:underline">{lead.phone}</span>
+                                             </a>
                                           ) : (
                                             <span>N/A</span>
                                           )}
@@ -316,6 +361,11 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                                         </td>
                                         <td className="p-4 block md:table-cell">
                                             <div className="flex items-center space-x-1">
+                                                {lead.phone && (
+                                                    <button onClick={() => handleOpenWhatsAppModal(lead)} className="p-2 text-green-400 hover:text-green-300 rounded-md hover:bg-slate-700" title="Enviar Producto por WhatsApp">
+                                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                                    </button>
+                                                )}
                                                 <button onClick={() => handleOpenConvertModal(lead)} className="p-2 text-green-400 hover:text-green-300 rounded-md hover:bg-slate-700" title="Convertir a Oportunidad"><CurrencyDollarIcon className="h-5 w-5" /></button>
                                                 <button onClick={() => handleOpenInteractionModal(lead)} className="p-2 text-cyan-400 hover:text-cyan-300 rounded-md hover:bg-slate-700" title="Ver/Añadir Interacciones"><ChatBubbleLeftRightIcon className="h-5 w-5" /></button>
                                                 <button onClick={() => handleOpenLeadModal(lead)} className="p-2 text-yellow-400 hover:text-yellow-300 rounded-md hover:bg-slate-700" title="Editar Prospecto"><PencilIcon className="h-5 w-5" /></button>
@@ -332,16 +382,40 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
 
             {/* --- Modals --- */}
             
+            {isWhatsAppModalOpen && whatsappLead && (
+                <WhatsAppProductModal
+                    isOpen={isWhatsAppModalOpen}
+                    onClose={handleCloseWhatsAppModal}
+                    lead={whatsappLead}
+                    products={products}
+                    templates={whatsappTemplates}
+                    onSend={handleWhatsAppSent}
+                />
+            )}
+
             {isLeadModalOpen && (
                  <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4">
                     <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-slate-700">
                         <h2 className="text-2xl font-bold text-white mb-6">{editingLead ? 'Editar Prospecto' : 'Nuevo Prospecto'}</h2>
                         <form onSubmit={handleLeadSubmit} className="space-y-4">
-                             <input type="text" name="name" value={leadFormData.name} onChange={(e) => setLeadFormData(p => ({...p, name: e.target.value}))} placeholder="Nombre del Contacto" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
-                             <input type="text" name="company" value={leadFormData.company} onChange={(e) => setLeadFormData(p => ({...p, company: e.target.value}))} placeholder="Empresa" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
-                             <input type="email" name="email" value={leadFormData.email} onChange={(e) => setLeadFormData(p => ({...p, email: e.target.value}))} placeholder="Email" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
-                             <input type="tel" name="phone" value={leadFormData.phone} onChange={(e) => setLeadFormData(p => ({...p, phone: e.target.value}))} placeholder="Teléfono" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-                             <input type="text" name="source" value={leadFormData.source} onChange={(e) => setLeadFormData(p => ({...p, source: e.target.value}))} placeholder="Origen del Prospecto (ej. Web, Referido)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                             <input type="text" name="name" value={leadFormData.name} onChange={(e) => setLeadFormData(p => ({...p, name: e.target.value}))} placeholder="Nombre del Contacto *" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
+                             <input type="text" name="company" value={leadFormData.company} onChange={(e) => setLeadFormData(p => ({...p, company: e.target.value}))} placeholder="Empresa (Opcional)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                             <input type="email" name="email" value={leadFormData.email} onChange={(e) => setLeadFormData(p => ({...p, email: e.target.value}))} placeholder="Email (Opcional)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                             <input type="tel" name="phone" value={leadFormData.phone} onChange={(e) => setLeadFormData(p => ({...p, phone: e.target.value}))} placeholder="Teléfono *" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
+                             
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <input type="text" name="source" value={leadFormData.source} onChange={(e) => setLeadFormData(p => ({...p, source: e.target.value}))} placeholder="Interés (ej. Ecógrafo)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                                <select name="origin" value={leadFormData.origin} onChange={(e) => setLeadFormData(p => ({...p, origin: e.target.value}))} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                    <option value="" disabled>Seleccione Origen</option>
+                                    <option value="Instagram">Instagram</option>
+                                    <option value="Referido">Referido</option>
+                                    <option value="Tiktok">Tiktok</option>
+                                    <option value="Local">Local</option>
+                                    <option value="Web">Web</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                             </div>
+
                              <select 
                                 name="salespersonId" 
                                 value={leadFormData.salespersonId} 
@@ -350,7 +424,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                                 required
                                 disabled={user.role === 'salesperson'}
                             >
-                                <option value="" disabled>Asignar a Vendedor...</option>
+                                <option value="ADM">Administrador</option>
                                 {salespeople.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                             </select>
                              <select name="status" value={leadFormData.status} onChange={(e) => setLeadFormData(p => ({...p, status: e.target.value as LeadStatus}))} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
@@ -429,7 +503,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                     <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-2xl border border-slate-700">
                         <h2 className="text-2xl font-bold text-white mb-6">Convertir Prospecto: {selectedLead.name}</h2>
                         <form onSubmit={handleConvertSubmit} className="space-y-4">
-                            <p className="text-slate-300">Creando una oportunidad para la empresa <span className="font-semibold text-cyan-400">{selectedLead.company}</span>.</p>
+                            <p className="text-slate-300">Creando una oportunidad para la empresa <span className="font-semibold text-cyan-400">{selectedLead.company || 'Sin Empresa Registrada'}</span>.</p>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <input type="date" name="closeDate" value={oppDetails.closeDate} onChange={e => setOppDetails(p => ({...p, closeDate: e.target.value}))} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                                 <select name="stage" value={oppDetails.stage} onChange={e => setOppDetails(p => ({...p, stage: e.target.value as OpportunityStage}))} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">

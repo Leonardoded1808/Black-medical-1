@@ -1,4 +1,5 @@
-import { Client, Product, Lead, Task, SupportTicket, Salesperson, LeadStatus, TaskStatus, SupportTicketStatus, SupportTicketPriority, Interaction, InteractionType, Opportunity, OpportunityStage, User } from './types';
+
+import { Client, Product, Lead, Task, SupportTicket, Salesperson, LeadStatus, TaskStatus, SupportTicketStatus, SupportTicketPriority, Interaction, InteractionType, Opportunity, OpportunityStage, User, WhatsAppTemplate } from './types';
 
 export const DUMMY_SALESPEOPLE: Salesperson[] = [];
 
@@ -20,3 +21,16 @@ export const DUMMY_INTERACTIONS: Interaction[] = [];
 export const DUMMY_TASKS: Task[] = [];
 
 export const DUMMY_SUPPORT_TICKETS: SupportTicket[] = [];
+
+export const DUMMY_WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [
+    {
+        id: 'tmpl-1',
+        name: 'Presentación de Producto',
+        content: 'Hola {NOMBRE_CLIENTE}, gusto en saludarte.\n\nTe comparto la información del equipo médico que podría interesarte:\n\n*{NOMBRE_PRODUCTO}*\n{DESCRIPCION_PRODUCTO}\n\n*Precio:* €{PRECIO_PRODUCTO}\n\nQuedo atento a tus dudas.'
+    },
+    {
+        id: 'tmpl-2',
+        name: 'Oferta Especial',
+        content: '¡Hola {NOMBRE_CLIENTE}!\n\nTenemos una oferta especial por tiempo limitado en nuestro *{NOMBRE_PRODUCTO}*.\n\nEs ideal para tu clínica. ¿Te gustaría agendar una demo?\n\nSaludos,\nBlack Medical.'
+    }
+];

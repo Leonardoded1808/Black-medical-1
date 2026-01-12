@@ -68,6 +68,7 @@ export interface Client {
   email: string;
   phone: string;
   address: string;
+  createdAt?: string;
 }
 
 export interface Product {
@@ -76,6 +77,7 @@ export interface Product {
   category: string;
   price: number;
   description: string;
+  image?: string;
 }
 
 export interface Interaction {
@@ -95,9 +97,11 @@ export interface Lead {
   email: string;
   phone: string;
   source: string;
+  origin?: string;
   status: LeadStatus;
   salespersonId: string;
   lastInteractionDate?: string;
+  createdAt?: string;
 }
 
 export interface Task {
@@ -135,12 +139,19 @@ export interface Opportunity {
   closeDate: string;
   salespersonId: string;
   originalLeadId?: string;
+  createdAt?: string;
 }
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+}
+
+export interface WhatsAppTemplate {
+    id: string;
+    name: string;
+    content: string;
 }
 
 export interface BackupData {
@@ -152,5 +163,6 @@ export interface BackupData {
     supportTickets: SupportTicket[];
     salespeople: Salesperson[];
     interactions: Interaction[];
+    whatsappTemplates: WhatsAppTemplate[];
     sourceSalespersonId: string;
 }

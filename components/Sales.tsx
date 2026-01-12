@@ -1,6 +1,5 @@
 
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Opportunity, Client, Product, Salesperson, OpportunityProduct, User, Interaction, Lead } from '../types';
 import { OpportunityStage, InteractionType } from '../types';
@@ -51,9 +50,23 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
     const initialFormState = { clientId: '', salespersonId: user.role === 'salesperson' ? user.id : '', stage: OpportunityStage.PROSPECCION, closeDate: '', value: 0 };
     const [oppFormData, setOppFormData] = useState(initialFormState);
     const [oppProducts, setOppProducts] = useState<OpportunityProduct[]>([]);
+    const [sortBy, setSortBy] = useState<'alpha' | 'recent'>('alpha');
     
     const location = useLocation();
     const navigate = useNavigate();
+
+    const sortedOpportunities = useMemo(() => {
+        const list = [...opportunities];
+        if (sortBy === 'alpha') {
+            return list.sort((a, b) => a.clientName.localeCompare(b.clientName));
+        } else {
+            return list.sort((a, b) => {
+                const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return dateB - dateA;
+            });
+        }
+    }, [opportunities, sortBy]);
 
     useEffect(() => {
         if (location.hash) {
@@ -217,9 +230,27 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
             <div className="p-4 sm:p-6 md:p-8 text-white">
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Oportunidades</h1>
-                     <button onClick={() => handleOpenModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
-                        <span>+ Nueva Oportunidad</span>
-                    </button>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                        <div className="flex items-center gap-3 bg-slate-800 p-1.5 rounded-lg border border-slate-700 self-start sm:self-center">
+                            <span className="text-sm text-slate-400 ml-2 hidden sm:inline">Ordenar por:</span>
+                            <button 
+                                onClick={() => setSortBy('alpha')}
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'alpha' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                A-Z
+                            </button>
+                            <button 
+                                onClick={() => setSortBy('recent')}
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'recent' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Recientes
+                            </button>
+                        </div>
+                        <button onClick={() => handleOpenModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
+                            <span>+ Nueva Oportunidad</span>
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="bg-slate-800 rounded-lg shadow-lg overflow-hidden">
@@ -236,7 +267,7 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700">
-                                {opportunities.map(opp => {
+                                {sortedOpportunities.map(opp => {
                                     const client = opp.clientId ? clients.find(c => c.id === opp.clientId) : null;
                                     const originalLead = opp.originalLeadId ? leads.find(l => l.id === opp.originalLeadId) : null;
             

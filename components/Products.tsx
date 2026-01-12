@@ -2,6 +2,9 @@
 import React, { useState } from 'react';
 import type { Product } from '../types';
 import ConfirmationModal from './ConfirmationModal';
+import CubeIcon from './icons/CubeIcon';
+import UploadIcon from './icons/UploadIcon';
+import TrashIcon from './icons/TrashIcon';
 
 interface ProductsProps {
     products: Product[];
@@ -17,11 +20,12 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [productToDeleteId, setProductToDeleteId] = useState<string | null>(null);
 
-    const initialFormState = {
+    const initialFormState: Omit<Product, 'id'> = {
         name: '',
         category: '',
         price: 0,
-        description: ''
+        description: '',
+        image: ''
     };
     
     const [productFormData, setProductFormData] = useState(initialFormState);
@@ -45,6 +49,21 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setProductFormData(prev => ({ ...prev, [name]: name === 'price' ? parseFloat(value) || 0 : value }));
+    };
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setProductFormData(prev => ({ ...prev, image: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleRemoveImage = () => {
+        setProductFormData(prev => ({ ...prev, image: '' }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -81,31 +100,46 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {products.map(product => (
-                        <div key={product.id} className="bg-slate-800 rounded-lg shadow-lg p-6 flex flex-col justify-between transition-all duration-300">
-                           <div className="flex-grow">
-                                <div className="flex justify-between items-start">
-                                    <h2 className="text-lg font-bold text-slate-100 flex-1 pr-2">{product.name}</h2>
-                                    <span className="text-xs bg-cyan-500/20 text-cyan-400 font-semibold px-2 py-1 rounded-full whitespace-nowrap">{product.category}</span>
+                        <div key={product.id} className="bg-slate-800 rounded-lg shadow-lg overflow-hidden flex flex-col transition-all duration-300 hover:shadow-xl border border-slate-700">
+                           <div className="relative h-48 w-full bg-slate-700 overflow-hidden group">
+                                {product.image ? (
+                                    <img src={product.image} alt={product.name} className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105" />
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-slate-500 bg-slate-700">
+                                        <CubeIcon className="h-16 w-16 opacity-50" />
+                                    </div>
+                                )}
+                                <div className="absolute top-2 right-2">
+                                     <span className="text-xs bg-slate-900/80 text-cyan-400 font-semibold px-2 py-1 rounded-full whitespace-nowrap backdrop-blur-sm border border-cyan-500/30">
+                                        {product.category}
+                                    </span>
                                 </div>
-                                <p className="text-slate-400 mt-2 text-sm min-h-[40px]">{product.description}</p>
-                            </div>
-                            <div className="mt-4">
-                                <p className="text-xl font-semibold text-green-400 text-right">
-                                    €{product.price.toLocaleString('es-ES')}
-                                </p>
-                                <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-end space-x-3">
-                                    <button
-                                        onClick={() => handleOpenModal(product)}
-                                        className="text-yellow-400 hover:text-yellow-300 font-semibold py-1 px-3 text-sm rounded-md hover:bg-slate-700 transition-colors"
-                                    >
-                                        Editar
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteClick(product.id)}
-                                        className="text-red-400 hover:text-red-300 font-semibold py-1 px-3 text-sm rounded-md hover:bg-slate-700 transition-colors"
-                                    >
-                                        Eliminar
-                                    </button>
+                           </div>
+                           
+                           <div className="p-5 flex flex-col flex-grow justify-between">
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-100 mb-2">{product.name}</h2>
+                                    <p className="text-slate-400 text-sm line-clamp-3 mb-4">{product.description}</p>
+                                </div>
+                                
+                                <div>
+                                    <p className="text-xl font-bold text-green-400 text-right mb-4">
+                                        €{product.price.toLocaleString('es-ES')}
+                                    </p>
+                                    <div className="pt-4 border-t border-slate-700/50 flex items-center justify-end space-x-3">
+                                        <button
+                                            onClick={() => handleOpenModal(product)}
+                                            className="text-yellow-400 hover:text-yellow-300 font-semibold py-1 px-3 text-sm rounded-md hover:bg-slate-700 transition-colors"
+                                        >
+                                            Editar
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteClick(product.id)}
+                                            className="text-red-400 hover:text-red-300 font-semibold py-1 px-3 text-sm rounded-md hover:bg-slate-700 transition-colors"
+                                        >
+                                            Eliminar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -114,13 +148,42 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
             </div>
              {isModalOpen && (
                  <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4">
-                    <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-slate-700">
+                    <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-slate-700 max-h-[90vh] overflow-y-auto">
                         <h2 className="text-2xl font-bold text-white mb-6">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
                              <input type="text" name="name" value={productFormData.name} onChange={handleInputChange} placeholder="Nombre del Producto" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                              <input type="text" name="category" value={productFormData.category} onChange={handleInputChange} placeholder="Categoría" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                              <input type="number" step="0.01" name="price" value={productFormData.price} onChange={handleInputChange} placeholder="Precio (€)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                              <textarea name="description" value={productFormData.description} onChange={handleInputChange} placeholder="Descripción" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 h-24" required />
+                             
+                             <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Foto del Producto (Opcional)</label>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex-1">
+                                        <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer hover:bg-slate-700/50 hover:border-cyan-500 transition-colors">
+                                            <div className="flex flex-col items-center">
+                                                <UploadIcon className="h-6 w-6 text-slate-400 mb-1" />
+                                                <span className="text-xs text-slate-400">Click para subir imagen</span>
+                                            </div>
+                                            <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                                        </label>
+                                    </div>
+                                    {productFormData.image && (
+                                        <div className="relative group h-20 w-20 flex-shrink-0">
+                                            <img src={productFormData.image} alt="Preview" className="h-full w-full object-cover rounded-lg border border-slate-600" />
+                                            <button 
+                                                type="button" 
+                                                onClick={handleRemoveImage}
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
+                                                title="Eliminar imagen"
+                                            >
+                                                <TrashIcon className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                             </div>
+
                             <div className="flex justify-end space-x-4 pt-4">
                                 <button type="button" onClick={handleCloseModal} className="py-2 px-4 bg-slate-600 hover:bg-slate-500 rounded-md text-white font-semibold transition-colors">Cancelar</button>
                                 <button type="submit" className="py-2 px-4 bg-cyan-500 hover:bg-cyan-600 rounded-md text-white font-semibold transition-colors">{editingProduct ? 'Actualizar Producto' : 'Guardar Producto'}</button>
