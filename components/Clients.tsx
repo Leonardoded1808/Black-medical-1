@@ -6,6 +6,7 @@ import { OpportunityStage } from '../types';
 import ChevronDownIcon from './icons/ChevronDownIcon';
 import PencilIcon from './icons/PencilIcon';
 import TrashIcon from './icons/TrashIcon';
+import SearchIcon from './icons/SearchIcon';
 import ConfirmationModal from './ConfirmationModal';
 
 interface ClientsProps {
@@ -21,6 +22,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, updateClient, deleteClient, 
     const [editingClient, setEditingClient] = useState<Client | null>(null);
     const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
     const [sortBy, setSortBy] = useState<'alpha' | 'recent'>('alpha');
+    const [searchTerm, setSearchTerm] = useState('');
     
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [clientToDeleteId, setClientToDeleteId] = useState<string | null>(null);
@@ -57,7 +59,19 @@ const Clients: React.FC<ClientsProps> = ({ clients, updateClient, deleteClient, 
     }, [clients, opportunities]);
 
     const sortedActiveClients = useMemo(() => {
-        const list = [...activeClients];
+        let list = [...activeClients];
+
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            list = list.filter(client => 
+                client.name.toLowerCase().includes(lowerTerm) ||
+                client.contactPerson.toLowerCase().includes(lowerTerm) ||
+                client.email.toLowerCase().includes(lowerTerm) ||
+                client.phone.includes(lowerTerm) ||
+                client.address.toLowerCase().includes(lowerTerm)
+            );
+        }
+
         if (sortBy === 'alpha') {
             return list.sort((a, b) => a.name.localeCompare(b.name));
         } else {
@@ -67,7 +81,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, updateClient, deleteClient, 
                 return dateB - dateA;
             });
         }
-    }, [activeClients, sortBy]);
+    }, [activeClients, sortBy, searchTerm]);
 
     const handleOpenModal = (client: Client) => {
         setEditingClient(client);
@@ -201,20 +215,33 @@ const Clients: React.FC<ClientsProps> = ({ clients, updateClient, deleteClient, 
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Clientes</h1>
                     
-                    <div className="flex items-center gap-3 bg-slate-800 p-1.5 rounded-lg border border-slate-700">
-                        <span className="text-sm text-slate-400 ml-2 hidden sm:inline">Ordenar por:</span>
-                        <button 
-                            onClick={() => setSortBy('alpha')}
-                            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'alpha' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            A-Z
-                        </button>
-                        <button 
-                            onClick={() => setSortBy('recent')}
-                            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'recent' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            Recientes
-                        </button>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
+                        <div className="relative w-full sm:w-64">
+                            <input
+                                type="text"
+                                placeholder="Buscar cliente..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-slate-800 text-white pl-10 pr-4 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            />
+                            <SearchIcon className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-slate-800 p-1.5 rounded-lg border border-slate-700 w-full sm:w-auto justify-center">
+                            <span className="text-sm text-slate-400 ml-2 hidden sm:inline">Ordenar por:</span>
+                            <button 
+                                onClick={() => setSortBy('alpha')}
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'alpha' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                A-Z
+                            </button>
+                            <button 
+                                onClick={() => setSortBy('recent')}
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${sortBy === 'recent' ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Recientes
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -235,7 +262,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, updateClient, deleteClient, 
                                 <tbody>
                                     <tr>
                                         <td colSpan={5} className="text-center p-8 text-slate-400">
-                                            No hay clientes con oportunidades ganadas.
+                                            {searchTerm ? 'No se encontraron clientes con ese criterio.' : 'No hay clientes con oportunidades ganadas.'}
                                         </td>
                                     </tr>
                                 </tbody>
@@ -294,7 +321,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, updateClient, deleteClient, 
                 <div className="md:hidden space-y-4">
                      {sortedActiveClients.length === 0 ? (
                         <div className="bg-slate-800 rounded-lg shadow-lg p-8 text-center text-slate-400">
-                            No hay clientes con oportunidades ganadas.
+                            {searchTerm ? 'No se encontraron clientes con ese criterio.' : 'No hay clientes con oportunidades ganadas.'}
                         </div>
                      ) : (
                         sortedActiveClients.map(client => {

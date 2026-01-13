@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import type { Salesperson, Lead, Task } from '../types';
 import { LeadStatus, TaskStatus } from '../types';
@@ -9,6 +8,7 @@ import ConfirmationModal from './ConfirmationModal';
 import ChevronDownIcon from './icons/ChevronDownIcon';
 import TagIcon from './TagIcon';
 import CalendarIcon from './icons/CalendarIcon';
+import SearchIcon from './icons/SearchIcon';
 
 interface SalespeopleProps {
     salespeople: Salesperson[];
@@ -39,11 +39,22 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
     const [salespersonFormData, setSalespersonFormData] = useState(initialFormState);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
 
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [salespersonToDeleteId, setSalespersonToDeleteId] = useState<string | null>(null);
 
     const [expandedSalespersonId, setExpandedSalespersonId] = useState<string | null>(null);
+
+    const filteredSalespeople = salespeople.filter(sp => {
+        if (!searchTerm) return true;
+        const lowerTerm = searchTerm.toLowerCase();
+        return (
+            sp.name.toLowerCase().includes(lowerTerm) ||
+            sp.email.toLowerCase().includes(lowerTerm) ||
+            sp.title.toLowerCase().includes(lowerTerm)
+        );
+    });
 
     const handleToggleDetails = (id: string) => {
         setExpandedSalespersonId(prevId => (prevId === id ? null : id));
@@ -140,9 +151,22 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
             <div className="p-4 sm:p-6 md:p-8 text-white">
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Vendedores</h1>
-                    <button onClick={() => handleOpenModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
-                        <span>+ Nuevo Vendedor</span>
-                    </button>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
+                        <div className="relative w-full sm:w-64">
+                            <input
+                                type="text"
+                                placeholder="Buscar vendedor..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-slate-800 text-white pl-10 pr-4 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            />
+                            <SearchIcon className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                        </div>
+                        <button onClick={() => handleOpenModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
+                            <span>+ Nuevo Vendedor</span>
+                        </button>
+                    </div>
                 </div>
                 
                 {/* Desktop Table */}
@@ -160,7 +184,7 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700">
-                                {salespeople.map(sp => {
+                                {filteredSalespeople.length > 0 ? filteredSalespeople.map(sp => {
                                     const isExpanded = expandedSalespersonId === sp.id;
                                     return (
                                         <React.Fragment key={sp.id}>
@@ -170,7 +194,9 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
                                                 </td>
                                                 <td className="p-4 font-medium text-slate-100 cursor-pointer">
                                                     <p>{sp.name}</p>
-                                                    <a href={`mailto:${sp.email}`} onClick={e => e.stopPropagation()} className="text-cyan-400 hover:text-cyan-300 text-xs font-normal">{sp.email}</a>
+                                                    {sp.email && (
+                                                        <a href={`mailto:${sp.email}`} onClick={e => e.stopPropagation()} className="text-cyan-400 hover:text-cyan-300 text-xs font-normal">{sp.email}</a>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-slate-300 cursor-pointer">{sp.title}</td>
                                                 <td className="p-4 text-slate-300 cursor-pointer">{leads.filter(l => l.salespersonId === sp.id).length}</td>
@@ -191,7 +217,13 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
                                             )}
                                         </React.Fragment>
                                     );
-                                })}
+                                }) : (
+                                    <tr>
+                                        <td colSpan={6} className="text-center p-8 text-slate-400">
+                                            {searchTerm ? 'No se encontraron vendedores con ese nombre.' : 'No hay vendedores registrados.'}
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -199,7 +231,7 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
 
                 {/* Mobile Card List */}
                 <div className="md:hidden space-y-4">
-                    {salespeople.map(sp => {
+                    {filteredSalespeople.length > 0 ? filteredSalespeople.map(sp => {
                         const isExpanded = expandedSalespersonId === sp.id;
                         return (
                              <div key={sp.id} className="bg-slate-800 rounded-lg shadow-lg">
@@ -208,7 +240,9 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
                                         <div className="flex-1 cursor-pointer">
                                             <h3 className="font-bold text-slate-100">{sp.name}</h3>
                                             <p className="text-sm text-slate-300">{sp.title}</p>
-                                            <a href={`mailto:${sp.email}`} onClick={e => e.stopPropagation()} className="text-cyan-400 hover:text-cyan-300 text-xs font-normal">{sp.email}</a>
+                                            {sp.email && (
+                                                <a href={`mailto:${sp.email}`} onClick={e => e.stopPropagation()} className="text-cyan-400 hover:text-cyan-300 text-xs font-normal">{sp.email}</a>
+                                            )}
                                         </div>
                                         <div className="flex items-center" onClick={e => e.stopPropagation()}>
                                             <button onClick={() => handleOpenModal(sp)} className="p-2 text-yellow-400"><PencilIcon className="h-4 w-4" /></button>
@@ -224,7 +258,11 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
                                 )}
                             </div>
                         )
-                    })}
+                    }) : (
+                        <div className="bg-slate-800 rounded-lg shadow-lg p-8 text-center text-slate-400">
+                            {searchTerm ? 'No se encontraron vendedores.' : 'No hay vendedores registrados.'}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -233,11 +271,12 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
                     <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-slate-700 overflow-y-auto max-h-full">
                         <h2 className="text-2xl font-bold text-white mb-6">{editingSalesperson ? 'Editar' : 'Nuevo'} Vendedor</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <input type="text" name="name" value={salespersonFormData.name} onChange={handleInputChange} placeholder="Nombre Completo" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
-                            <input type="text" name="title" value={salespersonFormData.title} onChange={handleInputChange} placeholder="Cargo" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
-                            <input type="email" name="email" value={salespersonFormData.email} onChange={handleInputChange} placeholder="Email" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
-                            <input type="tel" name="phone" value={salespersonFormData.phone} onChange={handleInputChange} placeholder="Teléfono" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-                            <input type="text" name="address" value={salespersonFormData.address} onChange={handleInputChange} placeholder="Dirección" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            {/* Form fields */}
+                            <input type="text" name="name" value={salespersonFormData.name} onChange={handleInputChange} placeholder="Nombre Completo *" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
+                            <input type="text" name="title" value={salespersonFormData.title} onChange={handleInputChange} placeholder="Cargo (Opcional)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            <input type="email" name="email" value={salespersonFormData.email} onChange={handleInputChange} placeholder="Email (Opcional)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            <input type="tel" name="phone" value={salespersonFormData.phone} onChange={handleInputChange} placeholder="Teléfono (Opcional)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            <input type="text" name="address" value={salespersonFormData.address} onChange={handleInputChange} placeholder="Dirección (Opcional)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                             
                             {editingSalesperson ? (
                                 <div className="pt-2">

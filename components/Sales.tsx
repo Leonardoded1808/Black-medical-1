@@ -7,6 +7,7 @@ import PencilIcon from './icons/PencilIcon';
 import TrashIcon from './icons/TrashIcon';
 import ConfirmationModal from './ConfirmationModal';
 import ChatBubbleLeftRightIcon from './icons/ChatBubbleLeftRightIcon';
+import SearchIcon from './icons/SearchIcon';
 
 interface OpportunitiesProps {
     user: User;
@@ -51,12 +52,24 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
     const [oppFormData, setOppFormData] = useState(initialFormState);
     const [oppProducts, setOppProducts] = useState<OpportunityProduct[]>([]);
     const [sortBy, setSortBy] = useState<'alpha' | 'recent'>('alpha');
+    const [searchTerm, setSearchTerm] = useState('');
     
     const location = useLocation();
     const navigate = useNavigate();
 
     const sortedOpportunities = useMemo(() => {
-        const list = [...opportunities];
+        let list = [...opportunities];
+
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            list = list.filter(opp => {
+                const clientMatch = opp.clientName.toLowerCase().includes(lowerTerm);
+                const productMatch = opp.products.some(p => p.productName.toLowerCase().includes(lowerTerm));
+                const salespersonMatch = salespeople.find(sp => sp.id === opp.salespersonId)?.name.toLowerCase().includes(lowerTerm);
+                return clientMatch || productMatch || salespersonMatch;
+            });
+        }
+
         if (sortBy === 'alpha') {
             return list.sort((a, b) => a.clientName.localeCompare(b.clientName));
         } else {
@@ -66,7 +79,7 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                 return dateB - dateA;
             });
         }
-    }, [opportunities, sortBy]);
+    }, [opportunities, sortBy, searchTerm, salespeople]);
 
     useEffect(() => {
         if (location.hash) {
@@ -231,8 +244,19 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Oportunidades</h1>
                     
-                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                        <div className="flex items-center gap-3 bg-slate-800 p-1.5 rounded-lg border border-slate-700 self-start sm:self-center">
+                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
+                        <div className="relative w-full sm:w-64">
+                            <input
+                                type="text"
+                                placeholder="Buscar oportunidad..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-slate-800 text-white pl-10 pr-4 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            />
+                            <SearchIcon className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-slate-800 p-1.5 rounded-lg border border-slate-700 w-full sm:w-auto justify-center">
                             <span className="text-sm text-slate-400 ml-2 hidden sm:inline">Ordenar por:</span>
                             <button 
                                 onClick={() => setSortBy('alpha')}
@@ -267,7 +291,7 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700">
-                                {sortedOpportunities.map(opp => {
+                                {sortedOpportunities.length > 0 ? sortedOpportunities.map(opp => {
                                     const client = opp.clientId ? clients.find(c => c.id === opp.clientId) : null;
                                     const originalLead = opp.originalLeadId ? leads.find(l => l.id === opp.originalLeadId) : null;
             
@@ -326,7 +350,13 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                                             </div>
                                         </td>
                                     </tr>
-                                )})}
+                                )}) : (
+                                    <tr>
+                                        <td colSpan={6} className="text-center p-8 text-slate-400">
+                                            {searchTerm ? 'No se encontraron oportunidades con ese criterio.' : 'No hay oportunidades registradas.'}
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -424,66 +454,7 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                     </div>
                 </div>
             )}
-            {isInteractionModalOpen && selectedOpp && (
-                 <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-start p-4 pt-10 sm:pt-16">
-                    <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-2xl border border-slate-700">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl sm:text-2xl font-bold text-white">Interacciones: {selectedOpp.clientName}</h2>
-                            <button onClick={handleCloseInteractionModal} className="text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
-                        </div>
-                        
-                        <form onSubmit={handleInteractionSubmit} className="space-y-4 bg-slate-700/50 p-4 rounded-lg mb-6">
-                             <h3 className="text-lg font-semibold text-white">{editingInteraction ? 'Editar Interacción' : 'Añadir Nueva Interacción'}</h3>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <select name="type" value={newInteraction.type} onChange={e => setNewInteraction(p => ({...p, type: e.target.value as InteractionType}))} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                    {Object.values(InteractionType).map(type => <option key={type} value={type}>{type}</option>)}
-                                </select>
-                                <select 
-                                    name="salespersonId" 
-                                    value={newInteraction.salespersonId} 
-                                    onChange={e => setNewInteraction(p => ({...p, salespersonId: e.target.value}))} 
-                                    className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" 
-                                    required
-                                    disabled={user.role === 'salesperson'}
-                                >
-                                    <option value="" disabled>Realizada por...</option>
-                                    {salespeople.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
-                                </select>
-                            </div>
-                            <textarea name="notes" value={newInteraction.notes} onChange={e => setNewInteraction(p => ({...p, notes: e.target.value}))} placeholder="Notas de la interacción..." className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 h-20" required />
-                            <div className="flex justify-end items-center gap-4">
-                                {editingInteraction && (
-                                    <button type="button" onClick={handleCancelEdit} className="py-2 px-4 bg-slate-600 hover:bg-slate-500 rounded-md text-white font-semibold transition-colors">Cancelar Edición</button>
-                                )}
-                                <button type="submit" className="py-2 px-4 bg-cyan-500 hover:bg-cyan-600 rounded-md text-white font-semibold transition-colors">
-                                    {editingInteraction ? 'Actualizar' : 'Guardar'} Interacción
-                                </button>
-                            </div>
-                        </form>
-
-                        <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
-                           {getOppInteractions(selectedOpp).map(interaction => (
-                               <div key={interaction.id} className="bg-slate-900/50 p-4 rounded-lg group">
-                                   <div className="flex justify-between items-start text-sm mb-2">
-                                       <div>
-                                            <span className="font-bold text-cyan-400">{interaction.type}</span>
-                                            <span className="text-slate-400 ml-4">{new Date(interaction.date).toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                           <button onClick={() => handleEditInteraction(interaction)} className="p-1 text-yellow-400 hover:text-yellow-300 rounded-md hover:bg-slate-700" title="Editar Interacción"><PencilIcon className="h-4 w-4" /></button>
-                                           <button onClick={() => handleDeleteInteractionClick(interaction)} className="p-1 text-red-400 hover:text-red-300 rounded-md hover:bg-slate-700" title="Eliminar Interacción"><TrashIcon className="h-4 w-4" /></button>
-                                       </div>
-                                   </div>
-                                   <p className="text-slate-200 whitespace-pre-wrap">{interaction.notes}</p>
-                                   <p className="text-right text-xs text-slate-500 mt-2">por {getSalespersonName(interaction.salespersonId)}</p>
-                               </div>
-                           ))}
-                           {getOppInteractions(selectedOpp).length === 0 && <p className="text-slate-400 text-center py-4">No hay interacciones registradas.</p>}
-                        </div>
-                    </div>
-                </div>
-            )}
-             <ConfirmationModal
+            <ConfirmationModal
                 isOpen={isConfirmModalOpen}
                 onClose={() => setIsConfirmModalOpen(false)}
                 onConfirm={handleConfirmDelete}

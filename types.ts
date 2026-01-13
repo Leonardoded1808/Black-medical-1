@@ -102,6 +102,7 @@ export interface Lead {
   salespersonId: string;
   lastInteractionDate?: string;
   createdAt?: string;
+  isUnread?: boolean;
 }
 
 export interface Task {

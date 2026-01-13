@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import type { Lead, Salesperson, Interaction, Opportunity } from '../types';
@@ -76,13 +75,18 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
         leads: filteredLeads.filter(lead => lead.salespersonId === sp.id).length,
     })), [salespeople, filteredLeads]);
     
-    const leadsBySourceData = useMemo(() => Object.entries(
-        filteredLeads.reduce((acc, lead) => {
+    const leadsBySourceData = useMemo(() => {
+        const counts = filteredLeads.reduce((acc, lead) => {
             const source = lead.source || 'Sin interés';
             acc[source] = (acc[source] || 0) + 1;
             return acc;
-        }, {} as Record<string, number>)
-    ).map(([name, value]) => ({ name, value })), [filteredLeads]);
+        }, {} as Record<string, number>);
+
+        return Object.entries(counts)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => Number(b.value) - Number(a.value))
+            .slice(0, 5); // Top 5 interests
+    }, [filteredLeads]);
 
     const leadsByOriginData = useMemo(() => Object.entries(
         filteredLeads.reduce((acc, lead) => {
@@ -199,7 +203,7 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
                     </ResponsiveContainer>
                 </div>
                 <div className="lg:col-span-2 bg-slate-800 p-4 sm:p-6 rounded-lg">
-                    <h2 className="text-xl font-semibold mb-4 text-slate-200">Prospectos por Interés <span className="text-base font-normal text-slate-400">{titleSuffix}</span></h2>
+                    <h2 className="text-xl font-semibold mb-4 text-slate-200">Prospectos por Interés (Top 5) <span className="text-base font-normal text-slate-400">{titleSuffix}</span></h2>
                     <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                             <Pie

@@ -356,7 +356,7 @@ const App: React.FC = () => {
             ),
             supportTickets: mainSupportTickets.filter(st => assignedClientIds.has(st.clientId!)),
             salespeople: mainSalespeople, // All salespeople for context
-            whatsappTemplates: mainWhatsAppTemplates,
+            whatsappTemplates: mainWhatsAppTemplates, // Export ALL admin templates so salesperson gets them
         };
 
         const jsonString = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(salespersonData, null, 2))}`;
@@ -397,7 +397,16 @@ const App: React.FC = () => {
                 setMainSupportTickets(data.supportTickets);
                 setMainSalespeople(data.salespeople);
                 setMainInteractions(data.interactions);
-                setMainWhatsAppTemplates(data.whatsappTemplates || []);
+                
+                // MERGE templates instead of replacing them.
+                // This preserves local templates created by the salesperson while adding new ones from Admin.
+                setMainWhatsAppTemplates(prev => {
+                    const incomingTemplates = data.whatsappTemplates || [];
+                    const mergedMap = new Map(prev.map(t => [t.id, t]));
+                    // Add incoming templates. If ID exists, it overwrites (assuming admin/backup is authoritative source for updates)
+                    incomingTemplates.forEach(t => mergedMap.set(t.id, t));
+                    return Array.from(mergedMap.values());
+                });
 
                 alert('Los datos del administrador han sido importados y actualizados correctamente.');
 
@@ -452,6 +461,7 @@ const App: React.FC = () => {
         setMainOpportunities(prev => merge(prev, data.opportunities));
         setMainTasks(prev => merge(prev, data.tasks));
         setMainInteractions(prev => merge(prev, data.interactions));
+        setMainWhatsAppTemplates(prev => merge(prev, data.whatsappTemplates || []));
         
         alert("Los datos han sido fusionados con éxito.");
     };
@@ -493,12 +503,29 @@ const App: React.FC = () => {
     }, [mainClients, mainLeads, mainOpportunities]);
 
     const addLead = useCallback((leadData: Omit<Lead, 'id'>) => {
-        const newLead: Lead = { ...leadData, id: `lead-${Date.now()}`, salespersonId: leadData.salespersonId || currentUser?.id || '', createdAt: new Date().toISOString() };
+        const newLead: Lead = { 
+            ...leadData, 
+            id: `lead-${Date.now()}`, 
+            salespersonId: leadData.salespersonId || currentUser?.id || '', 
+            createdAt: new Date().toISOString(),
+            isUnread: true // New leads are always unread
+        };
         setMainLeads(prev => [newLead, ...prev]);
     }, [currentUser]);
 
     const updateLead = useCallback((updatedLead: Lead) => {
-        setMainLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+        setMainLeads(prev => prev.map(l => {
+            if (l.id === updatedLead.id) {
+                // Check if the salesperson has been changed (reassigned)
+                const isReassigned = l.salespersonId !== updatedLead.salespersonId;
+                if (isReassigned) {
+                    // Force unread if reassigned
+                    return { ...updatedLead, isUnread: true };
+                }
+                return updatedLead;
+            }
+            return l;
+        }));
     }, []);
     
     const deleteLead = useCallback((leadId: string) => {
@@ -568,12 +595,14 @@ const App: React.FC = () => {
         let clientToUse: Client | undefined;
         let finalOppData = { ...updatedOpportunity };
 
+        // Ensure we find or create a client if the opportunity is WON
         if (finalOppData.stage === OpportunityStage.GANADA && !finalOppData.clientId) {
             let existingClient = mainClients.find(c => c.name.toLowerCase() === finalOppData.clientName.toLowerCase());
             
             if (existingClient) {
                 clientToUse = existingClient;
             } else {
+                // Try to find the original lead to get contact details
                 const originalLead = finalOppData.originalLeadId ? mainLeads.find(l => l.id === finalOppData.originalLeadId) : null;
                 clientToUse = addClient({
                     name: finalOppData.clientName,
@@ -762,6 +791,24 @@ const App: React.FC = () => {
         if (!lead) return null;
         
         const value = opportunityData.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+        let finalClientId = undefined;
+
+        // CRITICAL FIX: If stage is GANADA, create Client immediately so it appears in Clients list
+        if (opportunityData.stage === OpportunityStage.GANADA) {
+            const existingClient = mainClients.find(c => c.name.toLowerCase() === lead.company.toLowerCase());
+            if (existingClient) {
+                finalClientId = existingClient.id;
+            } else {
+                const newClient = addClient({
+                    name: lead.company || lead.name, // Fallback if no company
+                    contactPerson: lead.name,
+                    email: lead.email,
+                    phone: lead.phone,
+                    address: ''
+                });
+                finalClientId = newClient.id;
+            }
+        }
 
         const newOpp = addOpportunity({
             products: opportunityData.products,
@@ -770,14 +817,15 @@ const App: React.FC = () => {
             stage: opportunityData.stage,
             value: value,
             originalLeadId: leadId,
-        }, lead.company);
+            clientId: finalClientId,
+        }, lead.company || lead.name);
 
         if (newOpp) {
             updateLead({ ...lead, status: LeadStatus.CALIFICADO });
         }
         
         return newOpp;
-    }, [addOpportunity, updateLead, mainLeads]);
+    }, [addOpportunity, updateLead, mainLeads, mainClients, addClient]);
     
     const navLinkClasses = "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors";
     const activeClassName = `${navLinkClasses} bg-slate-700 text-white`;
