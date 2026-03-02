@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Task, Client, Salesperson, User, Lead, Opportunity } from '../types';
-import { TaskStatus } from '../types';
+import { TaskStatus, TaskPriority, TaskType } from '../types';
 import PencilIcon from './icons/PencilIcon';
 import TrashIcon from './icons/TrashIcon';
 import BriefcaseIcon from './icons/BriefcaseIcon';
@@ -36,7 +36,7 @@ const Agenda: React.FC<AgendaProps> = ({ user, tasks, clients, leads, opportunit
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
-    const initialFormState: Omit<Task, 'id' | 'associatedName' | 'opportunityValue'> = { title: '', description: '', dueDate: '', salespersonId: user.role === 'salesperson' ? user.id : '', status: TaskStatus.PENDIENTE, clientId: '', leadId: '', opportunityId: '' };
+    const initialFormState: Omit<Task, 'id' | 'associatedName' | 'opportunityValue'> = { title: '', description: '', dueDate: '', salespersonId: user.role === 'salesperson' ? user.id : '', status: TaskStatus.PENDIENTE, priority: TaskPriority.MEDIA, type: TaskType.LLAMADA, clientId: '', leadId: '', opportunityId: '' };
     const [taskFormData, setTaskFormData] = useState(initialFormState);
     const [associatedEntity, setAssociatedEntity] = useState('');
     
@@ -346,6 +346,14 @@ const Agenda: React.FC<AgendaProps> = ({ user, tasks, clients, leads, opportunit
                             <select name="status" value={taskFormData.status} onChange={handleInputChange} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
                                 {Object.values(TaskStatus).map(status => <option key={status} value={status}>{status}</option>)}
                             </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <select name="priority" value={taskFormData.priority} onChange={handleInputChange} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                    {Object.values(TaskPriority).map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                                <select name="type" value={taskFormData.type} onChange={handleInputChange} className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                    {Object.values(TaskType).map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
                             <div className="flex justify-end space-x-4 pt-4">
                                 <button type="button" onClick={handleCloseModal} className="py-2 px-4 bg-slate-600 hover:bg-slate-500 rounded-md text-white font-semibold transition-colors">Cancelar</button>
                                 <button type="submit" className="py-2 px-4 bg-cyan-500 hover:bg-cyan-600 rounded-md text-white font-semibold transition-colors">{editingTask ? 'Actualizar' : 'Guardar'}</button>

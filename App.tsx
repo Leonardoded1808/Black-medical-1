@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import * as ReactRouterDOM from 'react-router-dom';
 import { DUMMY_CLIENTS, DUMMY_LEADS, DUMMY_PRODUCTS, DUMMY_TASKS, DUMMY_SUPPORT_TICKETS, DUMMY_SALESPEOPLE, DUMMY_INTERACTIONS, DUMMY_OPPORTUNITIES, DUMMY_USERS, DUMMY_WHATSAPP_TEMPLATES } from './constants';
 import type { Client, Lead, Product, Task, SupportTicket, Salesperson, Interaction, Opportunity, OpportunityProduct, User, BackupData, WhatsAppTemplate } from './types';
-import { LeadStatus, OpportunityStage, TaskStatus } from './types';
+import { LeadStatus, OpportunityStage, TaskStatus, TaskPriority, TaskType } from './types';
 
 import Panel from './components/Dashboard';
 import Clients from './components/Clients';
@@ -38,6 +38,7 @@ import KeyIcon from './components/icons/KeyIcon';
 import UploadIcon from './components/icons/UploadIcon';
 import SearchIcon from './components/icons/SearchIcon';
 import ChatBubbleBottomCenterTextIcon from './components/icons/ChatBubbleBottomCenterTextIcon';
+import BellIcon from './components/icons/BellIcon';
 
 
 // Custom hook to manage state in localStorage
@@ -388,27 +389,37 @@ const App: React.FC = () => {
                     throw new Error(`Este backup pertenece a otro vendedor (${data.sourceSalespersonId}) y no puede ser importado.`);
                 }
                 
-                // Directly set the main state, the local state will update via useEffect
-                setMainClients(data.clients);
-                setMainLeads(data.leads);
-                setMainProducts(data.products);
-                setMainOpportunities(data.opportunities);
-                setMainTasks(data.tasks);
-                setMainSupportTickets(data.supportTickets);
-                setMainSalespeople(data.salespeople);
-                setMainInteractions(data.interactions);
+                // Safe merge function: Keep local data, add only new items from backup (based on ID)
+                const safeMerge = <T extends {id: string}>(local: T[], incoming: T[]): T[] => {
+                    const localIds = new Set(local.map(item => item.id));
+                    const newItems = incoming.filter(item => !localIds.has(item.id));
+                    return [...local, ...newItems];
+                };
+                
+                setMainClients(prev => safeMerge(prev, data.clients));
+                setMainLeads(prev => safeMerge(prev, data.leads));
+                setMainProducts(prev => safeMerge(prev, data.products));
+                setMainOpportunities(prev => safeMerge(prev, data.opportunities));
+                setMainTasks(prev => safeMerge(prev, data.tasks));
+                setMainSupportTickets(prev => safeMerge(prev, data.supportTickets));
+                setMainSalespeople(prev => safeMerge(prev, data.salespeople));
+                setMainInteractions(prev => safeMerge(prev, data.interactions));
                 
                 // MERGE templates instead of replacing them.
-                // This preserves local templates created by the salesperson while adding new ones from Admin.
                 setMainWhatsAppTemplates(prev => {
                     const incomingTemplates = data.whatsappTemplates || [];
                     const mergedMap = new Map(prev.map(t => [t.id, t]));
-                    // Add incoming templates. If ID exists, it overwrites (assuming admin/backup is authoritative source for updates)
-                    incomingTemplates.forEach(t => mergedMap.set(t.id, t));
+                    // For templates, we might want to allow updates if they are system templates?
+                    // But sticking to the rule "no overwrite":
+                    incomingTemplates.forEach(t => {
+                        if (!mergedMap.has(t.id)) {
+                            mergedMap.set(t.id, t);
+                        }
+                    });
                     return Array.from(mergedMap.values());
                 });
 
-                alert('Los datos del administrador han sido importados y actualizados correctamente.');
+                alert('Los datos del administrador han sido importados y anexados correctamente (sin sobrescribir existentes).');
 
             } catch (err: any) {
                 alert(`Error al importar: ${err.message}`);
@@ -448,22 +459,21 @@ const App: React.FC = () => {
     const handleMergeSalespersonData = (data: BackupData) => {
         if (currentUser?.role !== 'admin') return;
         
-        const merge = <T extends {id: string}>(mainData: T[], localData: T[]): T[] => {
-            const mainDataMap = new Map(mainData.map(item => [item.id, item]));
-            localData.forEach(item => {
-                mainDataMap.set(item.id, item);
-            });
-            return Array.from(mainDataMap.values());
+        // Safe merge: Keep main data, append only new items from localData
+        const safeMerge = <T extends {id: string}>(mainData: T[], localData: T[]): T[] => {
+            const mainIds = new Set(mainData.map(item => item.id));
+            const newItems = localData.filter(item => !mainIds.has(item.id));
+            return [...mainData, ...newItems];
         };
         
-        setMainClients(prev => merge(prev, data.clients));
-        setMainLeads(prev => merge(prev, data.leads));
-        setMainOpportunities(prev => merge(prev, data.opportunities));
-        setMainTasks(prev => merge(prev, data.tasks));
-        setMainInteractions(prev => merge(prev, data.interactions));
-        setMainWhatsAppTemplates(prev => merge(prev, data.whatsappTemplates || []));
+        setMainClients(prev => safeMerge(prev, data.clients));
+        setMainLeads(prev => safeMerge(prev, data.leads));
+        setMainOpportunities(prev => safeMerge(prev, data.opportunities));
+        setMainTasks(prev => safeMerge(prev, data.tasks));
+        setMainInteractions(prev => safeMerge(prev, data.interactions));
+        setMainWhatsAppTemplates(prev => safeMerge(prev, data.whatsappTemplates || []));
         
-        alert("Los datos han sido fusionados con éxito.");
+        alert("Los datos han sido anexados con éxito (sin sobrescribir existentes).");
     };
 
     // --- Memoized CRUD Functions ---
@@ -527,6 +537,23 @@ const App: React.FC = () => {
             return l;
         }));
     }, []);
+
+    const bulkUpdateLeads = useCallback((leadsToUpdate: Lead[]) => {
+        setMainLeads(prev => {
+            const updatesMap = new Map(leadsToUpdate.map(l => [l.id, l]));
+            return prev.map(l => {
+                if (updatesMap.has(l.id)) {
+                    const updatedLead = updatesMap.get(l.id)!;
+                    const isReassigned = l.salespersonId !== updatedLead.salespersonId;
+                    if (isReassigned) {
+                        return { ...updatedLead, isUnread: true };
+                    }
+                    return updatedLead;
+                }
+                return l;
+            });
+        });
+    }, []);
     
     const deleteLead = useCallback((leadId: string) => {
         setMainLeads(prev => prev.filter(l => l.id !== leadId));
@@ -582,6 +609,8 @@ const App: React.FC = () => {
             dueDate: newOpportunity.closeDate,
             salespersonId: newOpportunity.salespersonId,
             status: TaskStatus.PENDIENTE,
+            priority: TaskPriority.ALTA,
+            type: TaskType.RECORDATORIO,
             opportunityId: newOpportunity.id,
             opportunityValue: newOpportunity.value,
             clientId: newOpportunity.clientId,
@@ -645,6 +674,8 @@ const App: React.FC = () => {
             const newOpportunityTask: Task = {
                 id: `task-opp-${fullyUpdatedOpp.id}`,
                 status: TaskStatus.PENDIENTE,
+                priority: TaskPriority.ALTA,
+                type: TaskType.RECORDATORIO,
                 opportunityId: fullyUpdatedOpp.id,
                 ...taskData,
             };
@@ -827,6 +858,20 @@ const App: React.FC = () => {
         return newOpp;
     }, [addOpportunity, updateLead, mainLeads, mainClients, addClient]);
     
+    const pendingTasksCount = useMemo(() => {
+        if (!currentUser) return 0;
+        const now = new Date();
+        now.setHours(23, 59, 59, 999);
+
+        return data.tasks.filter(task => {
+            if (task.status !== TaskStatus.PENDIENTE) return false;
+            if (currentUser.role === 'salesperson' && task.salespersonId !== currentUser.id) return false;
+            
+            const taskDate = new Date(task.dueDate);
+            return taskDate <= now;
+        }).length;
+    }, [data.tasks, currentUser]);
+
     const navLinkClasses = "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors";
     const activeClassName = `${navLinkClasses} bg-slate-700 text-white`;
     const inactiveClassName = `${navLinkClasses} text-slate-400 hover:bg-slate-700/50 hover:text-white`;
@@ -918,8 +963,8 @@ const App: React.FC = () => {
                         <ReactRouterDOM.Routes>
                             <ReactRouterDOM.Route path="/" element={<ReactRouterDOM.Navigate to="/panel" />} />
                             <ReactRouterDOM.Route path="/panel" element={<Panel clientsCount={data.clients.length} leadsCount={data.leads.length} salespeopleCount={data.salespeople.length} productsCount={data.products.length} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} opportunities={data.opportunities} />}/>
-                            <ReactRouterDOM.Route path="/clients" element={<Clients clients={data.clients} updateClient={updateClient} deleteClient={deleteClient} opportunities={data.opportunities} salespeople={data.salespeople} />} />
-                            <ReactRouterDOM.Route path="/listado" element={<Listado user={currentUser} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} products={data.products} opportunities={data.opportunities} addLead={addLead} updateLead={updateLead} deleteLead={deleteLead} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} convertLeadToOpportunity={convertLeadToOpportunity} whatsappTemplates={data.whatsappTemplates} />} />
+                            <ReactRouterDOM.Route path="/clients" element={<Clients clients={data.clients} updateClient={updateClient} deleteClient={deleteClient} opportunities={data.opportunities} salespeople={data.salespeople} interactions={data.interactions} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} currentUser={currentUser} />} />
+                            <ReactRouterDOM.Route path="/listado" element={<Listado user={currentUser} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} products={data.products} opportunities={data.opportunities} addLead={addLead} updateLead={updateLead} bulkUpdateLeads={bulkUpdateLeads} deleteLead={deleteLead} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} convertLeadToOpportunity={convertLeadToOpportunity} whatsappTemplates={data.whatsappTemplates} />} />
                             <ReactRouterDOM.Route path="/opportunities" element={<Opportunities user={currentUser} opportunities={data.opportunities} clients={data.clients} products={data.products} salespeople={data.salespeople} addOpportunity={addOpportunity} updateOpportunity={updateOpportunity} deleteOpportunity={deleteOpportunity} interactions={data.interactions} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} leads={data.leads} />} />
                             <ReactRouterDOM.Route path="/salespeople" element={<Salespeople salespeople={data.salespeople} leads={data.leads} tasks={data.tasks} addSalesperson={addSalesperson} updateSalesperson={updateSalesperson} deleteSalesperson={deleteSalesperson} />} />
                             <ReactRouterDOM.Route path="/products" element={<Products products={data.products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={deleteProduct} />} />
@@ -942,6 +987,20 @@ const App: React.FC = () => {
                     </main>
                 </div>
             </div>
+            <ReactRouterDOM.Link
+                to="/agenda"
+                className="fixed bottom-4 right-20 sm:bottom-6 sm:right-24 bg-yellow-500 hover:bg-yellow-600 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-lg flex items-center justify-center transform transition-transform hover:scale-110 z-50 mr-2"
+                aria-label="Ver Tareas Pendientes"
+            >
+                <div className="relative">
+                    <BellIcon className="h-7 w-7 sm:h-8 sm:h-8" />
+                    {pendingTasksCount > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full border-2 border-slate-800 animate-pulse">
+                            {pendingTasksCount}
+                        </span>
+                    )}
+                </div>
+            </ReactRouterDOM.Link>
              <button
                 onClick={() => setIsGlobalSearchOpen(true)}
                 className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-cyan-500 hover:bg-cyan-600 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-lg flex items-center justify-center transform transition-transform hover:scale-110 z-50"

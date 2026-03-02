@@ -117,12 +117,17 @@ const WhatsAppTemplates: React.FC<WhatsAppTemplatesProps> = ({ templates, addTem
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">Contenido del Mensaje</label>
                                 <div className="flex flex-wrap gap-2 mb-2">
-                                    <span className="text-xs text-slate-400 mr-2 self-center">Variables disponibles:</span>
-                                    <button type="button" onClick={() => insertVariable('{NOMBRE_CLIENTE}')} className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs text-cyan-300 border border-slate-500">Nombre Cliente</button>
+                                    <span className="text-xs text-slate-400 mr-2 self-center">Variables:</span>
+                                    <button type="button" onClick={() => insertVariable('{NOMBRE_CLIENTE}')} className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs text-cyan-300 border border-slate-500">Nombre</button>
                                     <button type="button" onClick={() => insertVariable('{EMPRESA_CLIENTE}')} className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs text-cyan-300 border border-slate-500">Empresa</button>
                                     <button type="button" onClick={() => insertVariable('{NOMBRE_PRODUCTO}')} className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs text-green-300 border border-slate-500">Producto</button>
                                     <button type="button" onClick={() => insertVariable('{PRECIO_PRODUCTO}')} className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs text-green-300 border border-slate-500">Precio</button>
-                                    <button type="button" onClick={() => insertVariable('{DESCRIPCION_PRODUCTO}')} className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs text-green-300 border border-slate-500">Descripción</button>
+                                </div>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    <span className="text-xs text-slate-400 mr-2 self-center">Emojis:</span>
+                                    {['👋', '✨', '🚀', '💰', '🏥', '👨‍⚕️', '📅', '✅', '🔥', '⭐'].map(emoji => (
+                                        <button key={emoji} type="button" onClick={() => insertVariable(emoji)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-lg border border-slate-600 transition-colors">{emoji}</button>
+                                    ))}
                                 </div>
                                 <textarea 
                                     value={formData.content} 

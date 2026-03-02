@@ -26,11 +26,11 @@ export const DUMMY_WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [
     {
         id: 'tmpl-1',
         name: 'Presentación de Producto',
-        content: 'Hola {NOMBRE_CLIENTE}, gusto en saludarte.\n\nTe comparto la información del equipo médico que podría interesarte:\n\n*{NOMBRE_PRODUCTO}*\n{DESCRIPCION_PRODUCTO}\n\n*Precio:* €{PRECIO_PRODUCTO}\n\nQuedo atento a tus dudas.'
+        content: 'Hola {NOMBRE_CLIENTE} 👋, gusto en saludarte.\n\nTe comparto la información del equipo médico que podría interesarte:\n\n*✨ {NOMBRE_PRODUCTO}*\n{DESCRIPCION_PRODUCTO}\n\n*💰 Precio:* €{PRECIO_PRODUCTO}\n\nQuedo atento a tus dudas. 👨‍⚕️'
     },
     {
         id: 'tmpl-2',
         name: 'Oferta Especial',
-        content: '¡Hola {NOMBRE_CLIENTE}!\n\nTenemos una oferta especial por tiempo limitado en nuestro *{NOMBRE_PRODUCTO}*.\n\nEs ideal para tu clínica. ¿Te gustaría agendar una demo?\n\nSaludos,\nBlack Medical.'
+        content: '¡Hola {NOMBRE_CLIENTE}! 🚀\n\nTenemos una oferta especial por tiempo limitado en nuestro *{NOMBRE_PRODUCTO}*.\n\nEs ideal para tu clínica 🏥. ¿Te gustaría agendar una demo? 📅\n\nSaludos,\nBlack Medical.'
     }
 ];

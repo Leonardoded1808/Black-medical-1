@@ -1,13 +1,16 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import type { Opportunity, Client, Product, Salesperson, OpportunityProduct, User, Interaction, Lead } from '../types';
+import type { Opportunity, Client, Product, Salesperson, OpportunityProduct, User, Interaction, Lead, Task } from '../types';
 import { OpportunityStage, InteractionType } from '../types';
 import PencilIcon from './icons/PencilIcon';
 import TrashIcon from './icons/TrashIcon';
 import ConfirmationModal from './ConfirmationModal';
+import InteractionsModal from './InteractionsModal';
 import ChatBubbleLeftRightIcon from './icons/ChatBubbleLeftRightIcon';
 import SearchIcon from './icons/SearchIcon';
+import CalendarIcon from './icons/CalendarIcon';
+import { TaskModal } from './TaskModal';
 
 interface OpportunitiesProps {
     user: User;
@@ -23,6 +26,7 @@ interface OpportunitiesProps {
     addInteraction: (interaction: Omit<Interaction, 'id' | 'date'>) => void;
     updateInteraction: (interaction: Interaction) => void;
     deleteInteraction: (interactionId: string) => void;
+    addTask: (task: Omit<Task, 'id' | 'associatedName' | 'opportunityValue'>) => void;
 }
 
 const stageColors: Record<OpportunityStage, string> = {
@@ -33,20 +37,17 @@ const stageColors: Record<OpportunityStage, string> = {
     [OpportunityStage.PERDIDA]: 'border-red-500/50 bg-red-500/10 text-red-400',
 };
 
-const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clients, leads, products, salespeople, interactions, addOpportunity, updateOpportunity, deleteOpportunity, addInteraction, updateInteraction, deleteInteraction }) => {
+const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clients, leads, products, salespeople, interactions, addOpportunity, updateOpportunity, deleteOpportunity, addInteraction, updateInteraction, deleteInteraction, addTask }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOpp, setEditingOpp] = useState<Opportunity | null>(null);
+    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [taskOpp, setTaskOpp] = useState<Opportunity | null>(null);
 
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [oppToDeleteId, setOppToDeleteId] = useState<string | null>(null);
 
     const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
     const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
-    const initialInteractionState = { type: InteractionType.LLAMADA, notes: '', salespersonId: '' };
-    const [newInteraction, setNewInteraction] = useState<{type: InteractionType, notes: string, salespersonId: string}>(initialInteractionState);
-    const [editingInteraction, setEditingInteraction] = useState<Interaction | null>(null);
-    const [interactionToDelete, setInteractionToDelete] = useState<Interaction | null>(null);
-    const [isInteractionConfirmModalOpen, setIsInteractionConfirmModalOpen] = useState(false);
 
     const initialFormState = { clientId: '', salespersonId: user.role === 'salesperson' ? user.id : '', stage: OpportunityStage.PROSPECCION, closeDate: '', value: 0 };
     const [oppFormData, setOppFormData] = useState(initialFormState);
@@ -56,6 +57,21 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
     
     const location = useLocation();
     const navigate = useNavigate();
+
+    const handleOpenTaskModal = (opp: Opportunity) => {
+        setTaskOpp(opp);
+        setIsTaskModalOpen(true);
+    };
+
+    const handleCloseTaskModal = () => {
+        setTaskOpp(null);
+        setIsTaskModalOpen(false);
+    };
+
+    const handleSaveTask = (taskData: Omit<Task, 'id'>) => {
+        addTask(taskData);
+        handleCloseTaskModal();
+    };
 
     const sortedOpportunities = useMemo(() => {
         let list = [...opportunities];
@@ -126,15 +142,12 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
 
     const handleOpenInteractionModal = (opp: Opportunity) => {
         setSelectedOpp(opp);
-        setNewInteraction({ ...initialInteractionState, salespersonId: opp.salespersonId });
         setIsInteractionModalOpen(true);
     };
 
     const handleCloseInteractionModal = () => {
         setSelectedOpp(null);
         setIsInteractionModalOpen(false);
-        setNewInteraction(initialInteractionState);
-        setEditingInteraction(null);
     };
     
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -187,47 +200,6 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
         }
         setIsConfirmModalOpen(false);
         setOppToDeleteId(null);
-    };
-    
-    const handleInteractionSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedOpp || !newInteraction.salespersonId) return;
-        
-        if (editingInteraction) {
-            updateInteraction({ ...editingInteraction, ...newInteraction });
-        } else {
-            addInteraction({ ...newInteraction, opportunityId: selectedOpp.id });
-        }
-        
-        setNewInteraction(initialInteractionState);
-        setEditingInteraction(null);
-    };
-
-    const handleEditInteraction = (interaction: Interaction) => {
-        setEditingInteraction(interaction);
-        setNewInteraction({
-            type: interaction.type,
-            notes: interaction.notes,
-            salespersonId: interaction.salespersonId,
-        });
-    };
-
-    const handleDeleteInteractionClick = (interaction: Interaction) => {
-        setInteractionToDelete(interaction);
-        setIsInteractionConfirmModalOpen(true);
-    };
-
-    const handleConfirmInteractionDelete = () => {
-        if (interactionToDelete) {
-            deleteInteraction(interactionToDelete.id);
-        }
-        setIsInteractionConfirmModalOpen(false);
-        setInteractionToDelete(null);
-    };
-    
-    const handleCancelEdit = () => {
-        setEditingInteraction(null);
-        setNewInteraction(initialInteractionState);
     };
     
     const getSalespersonName = (salespersonId: string) => salespeople.find(sp => sp.id === salespersonId)?.name || 'No asignado';
@@ -344,6 +316,20 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                                         </td>
                                         <td className="p-4 block md:table-cell">
                                             <div className="flex items-center space-x-2">
+                                                 {clientPhone !== 'N/A' && (
+                                                    <a 
+                                                        href={`https://wa.me/${clientPhone.replace(/\D/g, '')}`} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="p-2 text-green-400 hover:text-green-300 rounded-md hover:bg-slate-700" 
+                                                        title="Abrir WhatsApp Directo"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                                    </a>
+                                                 )}
+                                                 <button onClick={() => handleOpenTaskModal(opp)} className="p-2 text-purple-400 hover:text-purple-300 rounded-md hover:bg-slate-700" title="Agendar Tarea">
+                                                    <CalendarIcon className="h-4 w-4" />
+                                                 </button>
                                                  <button onClick={() => handleOpenInteractionModal(opp)} className="p-2 text-cyan-400 hover:text-cyan-300 rounded-md hover:bg-slate-700" title="Ver/Añadir Interacciones"><ChatBubbleLeftRightIcon className="h-4 w-4" /></button>
                                                  <button onClick={() => handleOpenModal(opp)} className="p-2 text-yellow-400 hover:text-yellow-300 rounded-md hover:bg-slate-700" title="Editar"><PencilIcon className="h-4 w-4" /></button>
                                                  <button onClick={() => handleDeleteClick(opp.id)} className="p-2 text-red-400 hover:text-red-300 rounded-md hover:bg-slate-700" title="Eliminar"><TrashIcon className="h-4 w-4" /></button>
@@ -469,13 +455,38 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                     ) : ''
                 }
             />
-            <ConfirmationModal
-                isOpen={isInteractionConfirmModalOpen}
-                onClose={() => setIsInteractionConfirmModalOpen(false)}
-                onConfirm={handleConfirmInteractionDelete}
-                title="Confirmar Eliminación de Interacción"
-                message="¿Está seguro de que desea eliminar esta interacción? Esta acción no se puede deshacer."
-            />
+            {isInteractionModalOpen && selectedOpp && (
+                <InteractionsModal
+                    isOpen={isInteractionModalOpen}
+                    onClose={handleCloseInteractionModal}
+                    title={`Interacciones con ${selectedOpp.clientName}`}
+                    entityId={selectedOpp.id}
+                    entityType="opportunity"
+                    interactions={getOppInteractions(selectedOpp)}
+                    salespeople={salespeople}
+                    currentUserId={user.id}
+                    onAdd={addInteraction}
+                    onUpdate={updateInteraction}
+                    onDelete={deleteInteraction}
+                />
+            )}
+
+            {isTaskModalOpen && taskOpp && (
+                <TaskModal
+                    isOpen={isTaskModalOpen}
+                    onClose={handleCloseTaskModal}
+                    onSave={handleSaveTask}
+                    initialData={{
+                        opportunityId: taskOpp.id,
+                        associatedName: taskOpp.clientName,
+                        clientId: taskOpp.clientId,
+                        leadId: taskOpp.originalLeadId,
+                    }}
+                    salespeople={salespeople}
+                    currentUserRole={user.role}
+                    currentUserId={user.id}
+                />
+            )}
         </>
     );
 };

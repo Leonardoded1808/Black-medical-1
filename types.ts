@@ -12,6 +12,19 @@ export enum TaskStatus {
   COMPLETADA = 'Completada',
 }
 
+export enum TaskPriority {
+    BAJA = 'Baja',
+    MEDIA = 'Media',
+    ALTA = 'Alta',
+}
+
+export enum TaskType {
+    LLAMADA = 'Llamada',
+    EMAIL = 'Email',
+    REUNION = 'Reunión',
+    RECORDATORIO = 'Recordatorio',
+}
+
 export enum SupportTicketStatus {
     ABIERTO = 'Abierto',
     EN_PROCESO = 'En Proceso',
@@ -78,12 +91,14 @@ export interface Product {
   price: number;
   description: string;
   image?: string;
+  currency?: string;
 }
 
 export interface Interaction {
     id: string;
     leadId?: string;
     opportunityId?: string;
+    clientId?: string;
     salespersonId: string;
     type: InteractionType;
     notes: string;
@@ -112,6 +127,8 @@ export interface Task {
     dueDate: string;
     salespersonId: string;
     status: TaskStatus;
+    priority: TaskPriority;
+    type: TaskType;
     clientId?: string;
     leadId?: string;
     associatedName?: string;

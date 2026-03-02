@@ -22,13 +22,15 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
     const [productToDeleteId, setProductToDeleteId] = useState<string | null>(null);
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [sortOrder, setSortOrder] = useState<'default' | 'asc'>('default');
 
     const initialFormState: Omit<Product, 'id'> = {
         name: '',
         category: '',
         price: 0,
         description: '',
-        image: ''
+        image: '',
+        currency: 'EUR'
     };
     
     const [productFormData, setProductFormData] = useState(initialFormState);
@@ -41,6 +43,11 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
             product.category.toLowerCase().includes(lowerTerm) ||
             product.description.toLowerCase().includes(lowerTerm)
         );
+    }).sort((a, b) => {
+        if (sortOrder === 'asc') {
+            return a.name.localeCompare(b.name);
+        }
+        return 0;
     });
 
     const handleOpenModal = (product: Product | null) => {
@@ -158,6 +165,13 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
                             />
                             <SearchIcon className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
                         </div>
+                        <button 
+                            onClick={() => setSortOrder(prev => prev === 'asc' ? 'default' : 'asc')}
+                            className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 w-full sm:w-auto ${sortOrder === 'asc' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'}`}
+                            title={sortOrder === 'asc' ? 'Quitar orden alfabético' : 'Ordenar alfabéticamente A-Z'}
+                        >
+                            <span className="text-lg leading-none">Aa</span>
+                        </button>
                         <button onClick={() => handleOpenModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
                             <span>+ Nuevo Producto</span>
                         </button>
@@ -191,7 +205,7 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
                                     
                                     <div>
                                         <p className="text-xl font-bold text-green-400 text-right mb-4">
-                                            €{product.price.toLocaleString('es-ES')}
+                                            {product.currency || '€'} {product.price.toLocaleString('es-ES')}
                                         </p>
                                         <div className="pt-4 border-t border-slate-700/50 flex items-center justify-end space-x-3">
                                             <button
@@ -225,7 +239,16 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
                         <form onSubmit={handleSubmit} className="space-y-4">
                              <input type="text" name="name" value={productFormData.name} onChange={handleInputChange} placeholder="Nombre del Producto" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                              <input type="text" name="category" value={productFormData.category} onChange={handleInputChange} placeholder="Categoría" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
-                             <input type="number" step="0.01" name="price" value={productFormData.price} onChange={handleInputChange} placeholder="Precio (€)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
+                             
+                             <div className="grid grid-cols-3 gap-4">
+                                <div className="col-span-2">
+                                    <input type="number" step="0.01" name="price" value={productFormData.price} onChange={handleInputChange} placeholder="Precio" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
+                                </div>
+                                <div>
+                                    <input type="text" name="currency" value={productFormData.currency || ''} onChange={handleInputChange} placeholder="Moneda (ej. EUR)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                                </div>
+                             </div>
+
                              <textarea name="description" value={productFormData.description} onChange={handleInputChange} placeholder="Descripción" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 h-24" required />
                              
                              <div>
