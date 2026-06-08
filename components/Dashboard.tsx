@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import type { Lead, Salesperson, Interaction, Opportunity } from '../types';
+import type { Lead, Salesperson, Interaction, Opportunity, Task } from '../types';
 import { LeadStatus, OpportunityStage } from '../types';
 import UserGroupIcon from './icons/UserGroupIcon';
 import TagIcon from './TagIcon';
@@ -8,6 +8,8 @@ import UserIcon from './icons/UserIcon';
 import CubeIcon from './icons/CubeIcon';
 import AnnotationIcon from './icons/AnnotationIcon';
 import BriefcaseIcon from './icons/BriefcaseIcon';
+
+import AiAlerts from './AiAlerts';
 
 interface PanelProps {
     clientsCount: number;
@@ -18,12 +20,13 @@ interface PanelProps {
     salespeople: Salesperson[];
     interactions: Interaction[];
     opportunities: Opportunity[];
+    tasks: Task[];
 }
 
 const COLORS = ['#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316'];
 const BAR_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#06b6d4', '#10b981'];
 
-const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCount, productsCount, leads, salespeople, interactions, opportunities }) => {
+const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCount, productsCount, leads, salespeople, interactions, opportunities, tasks }) => {
     
     const [dateRange, setDateRange] = useState('all');
 
@@ -127,6 +130,8 @@ const Panel: React.FC<PanelProps> = ({ clientsCount, leadsCount, salespeopleCoun
     return (
         <div className="p-4 sm:p-6 md:p-8 text-white space-y-8">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Panel</h1>
+            
+            <AiAlerts leads={leads} opportunities={opportunities} tasks={tasks} />
 
              <div className="flex flex-wrap items-center justify-start gap-2">
                 {

@@ -14,7 +14,7 @@ import { WhatsAppProductModal } from './WhatsAppProductModal';
 import { EmailProductModal } from './EmailProductModal';
 import EnvelopeIcon from './icons/EnvelopeIcon';
 
-interface ListadoProps {
+interface ClientesProps {
     user: User;
     leads: Lead[];
     salespeople: Salesperson[];
@@ -39,7 +39,7 @@ const statusColors: Record<LeadStatus, string> = {
     [LeadStatus.PERDIDO]: 'bg-red-500/20 text-red-300',
 };
 
-const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interactions, products, opportunities, whatsappTemplates, addLead, updateLead, bulkUpdateLeads, deleteLead, addInteraction, updateInteraction, deleteInteraction, convertLeadToOpportunity }) => {
+const Clientes: React.FC<ClientesProps> = ({ user, leads, salespeople, interactions, products, opportunities, whatsappTemplates, addLead, updateLead, bulkUpdateLeads, deleteLead, addInteraction, updateInteraction, deleteInteraction, convertLeadToOpportunity }) => {
     const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
     const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
     const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
@@ -88,8 +88,13 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
         }
     };
 
+    const filteredLeads = useMemo(() => {
+        if (user.role === 'admin') return leads;
+        return leads.filter(l => l.salespersonId === user.id);
+    }, [leads, user]);
+
     const sortedLeads = useMemo(() => {
-        let list = [...leads];
+        let list = [...filteredLeads];
 
         if (searchTerm) {
             const lowerTerm = searchTerm.toLowerCase();
@@ -116,7 +121,24 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                 return dateB - dateA;
             }
         });
-    }, [leads, sortBy, searchTerm]);
+    }, [filteredLeads, sortBy, searchTerm]); // Fixed filteredLeads dependency
+
+    const phoneDuplicates = useMemo(() => {
+        const counts: Record<string, number> = {};
+        leads.forEach(l => {
+            if (l.phone) {
+                const clean = l.phone.replace(/\D/g, '');
+                if (clean) counts[clean] = (counts[clean] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [leads]);
+
+    const isDuplicatePhone = (phone: string) => {
+        if (!phone) return false;
+        const clean = phone.replace(/\D/g, '');
+        return (phoneDuplicates[clean] || 0) > 1;
+    };
 
     const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
     const [bulkSalespersonId, setBulkSalespersonId] = useState<string>('');
@@ -274,7 +296,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
 
     const handleLeadSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!leadFormData.salespersonId) return alert("Por favor, asigne el prospecto a un vendedor.");
+        if (!leadFormData.salespersonId) return alert("Por favor, asigne el cliente a un vendedor.");
         if (editingLead) {
             updateLead({ ...editingLead, ...leadFormData });
         } else {
@@ -286,7 +308,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
     const handleConvertSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedLead || opportunityProducts.length === 0 || !oppDetails.closeDate) {
-            return alert("Por favor, complete todos los campos de la oportunidad.");
+            return alert("Por favor, complete todos los campos del prospecto.");
         }
         const newOpportunity = convertLeadToOpportunity(selectedLead.id, {
             ...oppDetails,
@@ -297,7 +319,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
         if (newOpportunity) {
             navigate(`/opportunities#${newOpportunity.id}`);
         } else {
-            alert("Error al convertir el prospecto. Por favor, inténtelo de nuevo.");
+            alert("Error al convertir el cliente. Por favor, inténtelo de nuevo.");
         }
     };
 
@@ -334,13 +356,13 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
         <>
             <div className="p-4 sm:p-6 md:p-8 text-white">
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Listado de Prospectos</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Clientes</h1>
                     
                     <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
                         <div className="relative w-full sm:w-64">
                             <input
                                 type="text"
-                                placeholder="Buscar prospecto..."
+                                placeholder="Buscar cliente..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full bg-slate-800 text-white pl-10 pr-4 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -364,7 +386,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                             </button>
                         </div>
                         <button onClick={() => handleOpenLeadModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
-                            <span>+ Nuevo Prospecto</span>
+                            <span>+ Nuevo Cliente</span>
                         </button>
                     </div>
                 </div>
@@ -373,7 +395,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                     <div className="bg-cyan-900/30 border border-cyan-500/50 p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in">
                         <div className="flex items-center gap-2 text-cyan-300">
                             <span className="font-bold text-lg">{selectedLeadIds.size}</span>
-                            <span>prospectos seleccionados</span>
+                            <span>clientes seleccionados</span>
                         </div>
                         <div className="flex items-center gap-3 w-full sm:w-auto">
                             <select
@@ -432,7 +454,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                                     <tr 
                                         key={lead.id} 
                                         id={lead.id} 
-                                        className={`transition-colors block md:table-row mb-2 md:mb-0 rounded-lg md:rounded-none ${lead.isUnread ? 'bg-blue-900/40 hover:bg-blue-900/50' : 'bg-slate-800 hover:bg-slate-700/50 md:bg-transparent'}`}
+                                        className={`transition-colors block md:table-row mb-2 md:mb-0 rounded-lg md:rounded-none ${lead.isUnread ? 'bg-blue-900/40 hover:bg-blue-900/50' : isDuplicatePhone(lead.phone) ? 'bg-red-900/40 hover:bg-red-900/50' : 'bg-slate-800 hover:bg-slate-700/50 md:bg-transparent'}`}
                                     >
                                         {user.role === 'admin' && (
                                             <td className="p-4 w-10 block md:table-cell">
@@ -451,6 +473,9 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                                                 {lead.isUnread && (
                                                     <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded animate-pulse">NUEVO</span>
                                                 )}
+                                                {isDuplicatePhone(lead.phone) && (
+                                                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">DUPLICADO</span>
+                                                )}
                                                 <p>{lead.name}</p>
                                             </div>
                                             <a href={`mailto:${lead.email}`} className="text-cyan-400 hover:text-cyan-300 text-xs">{lead.email}</a>
@@ -465,16 +490,6 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                                                     onClick={(e) => e.stopPropagation()}
                                                  >
                                                     {lead.phone}
-                                                 </a>
-                                                 <a 
-                                                    href={formatWhatsAppLink(lead.phone)} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer" 
-                                                    className="text-green-400 hover:text-green-300"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    title="Abrir WhatsApp"
-                                                 >
-                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                                                  </a>
                                              </div>
                                           ) : <span className="text-slate-500 italic">No registrado</span>}
@@ -497,17 +512,17 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
                                                         <EnvelopeIcon className="h-5 w-5" />
                                                     </button>
                                                 )}
-                                                <button onClick={() => handleOpenConvertModal(lead)} className="p-2 text-green-400 hover:text-green-300 rounded-md hover:bg-slate-700" title="Convertir a Oportunidad"><CurrencyDollarIcon className="h-5 w-5" /></button>
+                                                <button onClick={() => handleOpenConvertModal(lead)} className="p-2 text-green-400 hover:text-green-300 rounded-md hover:bg-slate-700" title="Convertir a Prospecto"><CurrencyDollarIcon className="h-5 w-5" /></button>
                                                 <button onClick={() => handleOpenInteractionModal(lead)} className="p-2 text-cyan-400 hover:text-cyan-300 rounded-md hover:bg-slate-700" title="Ver/Añadir Interacciones"><ChatBubbleLeftRightIcon className="h-5 w-5" /></button>
-                                                <button onClick={() => handleOpenLeadModal(lead)} className="p-2 text-yellow-400 hover:text-yellow-300 rounded-md hover:bg-slate-700" title="Editar Prospecto"><PencilIcon className="h-5 w-5" /></button>
-                                                <button onClick={() => handleDeleteClick(lead.id)} className="p-2 text-red-400 hover:text-red-300 rounded-md hover:bg-slate-700" title="Eliminar Prospecto"><TrashIcon className="h-5 w-5" /></button>
+                                                <button onClick={() => handleOpenLeadModal(lead)} className="p-2 text-yellow-400 hover:text-yellow-300 rounded-md hover:bg-slate-700" title="Editar Cliente"><PencilIcon className="h-5 w-5" /></button>
+                                                <button onClick={() => handleDeleteClick(lead.id)} className="p-2 text-red-400 hover:text-red-300 rounded-md hover:bg-slate-700" title="Eliminar Cliente"><TrashIcon className="h-5 w-5" /></button>
                                             </div>
                                         </td>
                                     </tr>
                                 )) : (
                                     <tr>
                                         <td colSpan={user.role === 'admin' ? 7 : 6} className="p-8 text-center text-slate-400">
-                                            {searchTerm ? 'No se encontraron prospectos con ese criterio de búsqueda.' : 'No hay prospectos registrados.'}
+                                            {searchTerm ? 'No se encontraron clientes con ese criterio de búsqueda.' : 'No hay clientes registrados.'}
                                         </td>
                                     </tr>
                                 )}
@@ -544,7 +559,7 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
             {isLeadModalOpen && (
                  <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4">
                     <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-slate-700">
-                        <h2 className="text-2xl font-bold text-white mb-6">{editingLead ? 'Editar Prospecto' : 'Nuevo Prospecto'}</h2>
+                        <h2 className="text-2xl font-bold text-white mb-6">{editingLead ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
                         <form onSubmit={handleLeadSubmit} className="space-y-4">
                              <input type="text" name="name" value={leadFormData.name} onChange={(e) => setLeadFormData(p => ({...p, name: e.target.value}))} placeholder="Nombre del Contacto *" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                              <input type="text" name="company" value={leadFormData.company} onChange={(e) => setLeadFormData(p => ({...p, company: e.target.value}))} placeholder="Empresa (Opcional)" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
@@ -718,4 +733,4 @@ const Listado: React.FC<ListadoProps> = ({ user, leads, salespeople, interaction
     );
 };
 
-export default Listado;
+export default Clientes;

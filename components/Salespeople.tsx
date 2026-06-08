@@ -78,19 +78,23 @@ const Salespeople: React.FC<SalespeopleProps> = ({ salespeople, leads, tasks, ad
         setSalespersonFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (editingSalesperson) {
-            if (password && password !== confirmPassword) {
-                alert("Las contraseñas no coinciden.");
-                return;
+        try {
+            if (editingSalesperson) {
+                if (password && password !== confirmPassword) {
+                    alert("Las contraseñas no coinciden.");
+                    return;
+                }
+                await updateSalesperson({ ...editingSalesperson, ...salespersonFormData }, password || undefined);
+            } else {
+                await addSalesperson(salespersonFormData, '123');
             }
-            updateSalesperson({ ...editingSalesperson, ...salespersonFormData }, password || undefined);
-        } else {
-            addSalesperson(salespersonFormData, '123');
+            handleCloseModal();
+        } catch (err) {
+            console.error(err);
+            alert("Hubo un error al guardar al vendedor. " + (err as Error).message);
         }
-        handleCloseModal();
     };
 
     const handleDeleteClick = (spId: string) => {

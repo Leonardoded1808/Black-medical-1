@@ -37,7 +37,7 @@ const stageColors: Record<OpportunityStage, string> = {
     [OpportunityStage.PERDIDA]: 'border-red-500/50 bg-red-500/10 text-red-400',
 };
 
-const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clients, leads, products, salespeople, interactions, addOpportunity, updateOpportunity, deleteOpportunity, addInteraction, updateInteraction, deleteInteraction, addTask }) => {
+const Prospectos: React.FC<OpportunitiesProps> = ({ user, opportunities, clients, leads, products, salespeople, interactions, addOpportunity, updateOpportunity, deleteOpportunity, addInteraction, updateInteraction, deleteInteraction, addTask }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOpp, setEditingOpp] = useState<Opportunity | null>(null);
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -52,7 +52,7 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
     const initialFormState = { clientId: '', salespersonId: user.role === 'salesperson' ? user.id : '', stage: OpportunityStage.PROSPECCION, closeDate: '', value: 0 };
     const [oppFormData, setOppFormData] = useState(initialFormState);
     const [oppProducts, setOppProducts] = useState<OpportunityProduct[]>([]);
-    const [sortBy, setSortBy] = useState<'alpha' | 'recent'>('alpha');
+    const [sortBy, setSortBy] = useState<'alpha' | 'recent'>('recent');
     const [searchTerm, setSearchTerm] = useState('');
     
     const location = useLocation();
@@ -214,13 +214,13 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
         <>
             <div className="p-4 sm:p-6 md:p-8 text-white">
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Oportunidades</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Prospectos</h1>
                     
                     <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
                         <div className="relative w-full sm:w-64">
                             <input
                                 type="text"
-                                placeholder="Buscar oportunidad..."
+                                placeholder="Buscar prospecto..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full bg-slate-800 text-white pl-10 pr-4 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -244,7 +244,7 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                             </button>
                         </div>
                         <button onClick={() => handleOpenModal(null)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
-                            <span>+ Nueva Oportunidad</span>
+                            <span>+ Nuevo Prospecto</span>
                         </button>
                     </div>
                 </div>
@@ -415,7 +415,7 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                                             <button type="button" onClick={() => handleRemoveProduct(p.productId)} className="text-red-400 hover:text-red-300 font-bold">&times;</button>
                                         </div>
                                     ))}
-                                    {oppProducts.length === 0 && <p className="text-slate-400 text-sm text-center">Añada productos a la oportunidad.</p>}
+                                    {oppProducts.length === 0 && <p className="text-slate-400 text-sm text-center">Añada productos al prospecto.</p>}
                                 </div>
                                 <div className="flex items-end gap-2">
                                     <div className="flex-grow">
@@ -444,13 +444,13 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
                 isOpen={isConfirmModalOpen}
                 onClose={() => setIsConfirmModalOpen(false)}
                 onConfirm={handleConfirmDelete}
-                title="Confirmar Eliminación de Oportunidad"
+                title="Confirmar Eliminación de Prospecto"
                 message={
                     oppToDeleteId ? (
                         <>
-                            ¿Está seguro de que desea eliminar la oportunidad para "<strong>{opportunities.find(o => o.id === oppToDeleteId)?.clientName}</strong>"?
+                            ¿Está seguro de que desea eliminar al prospecto de "<strong>{opportunities.find(o => o.id === oppToDeleteId)?.clientName}</strong>"?
                             <br/><br/>
-                            <span className="font-bold">La tarea asociada en el calendario y las interacciones de esta oportunidad también se eliminarán.</span>
+                            <span className="font-bold">La tarea asociada en el calendario y las interacciones de este prospecto también se eliminarán.</span>
                         </>
                     ) : ''
                 }
@@ -491,4 +491,4 @@ const Opportunities: React.FC<OpportunitiesProps> = ({ user, opportunities, clie
     );
 };
 
-export default Opportunities;
+export default Prospectos;

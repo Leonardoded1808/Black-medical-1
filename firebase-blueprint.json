@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "Represents a potential customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "company": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "source": { "type": "string" },
+        "origin": { "type": "string" },
+        "status": { "type": "string" },
+        "salespersonId": { "type": "string" },
+        "lastInteractionDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "isUnread": { "type": "boolean" }
+      },
+      "required": ["id", "name", "status", "salespersonId"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Represents a converted customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Opportunity": {
+      "title": "Opportunity",
+      "description": "Represents a sales opportunity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "stage": { "type": "string" },
+        "value": { "type": "number" },
+        "closeDate": { "type": "string" },
+        "salespersonId": { "type": "string" },
+        "originalLeadId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "products": { "type": "array" }
+      },
+      "required": ["id", "clientName", "stage", "value", "closeDate", "salespersonId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Represents a task assigned to a salesperson",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "salespersonId": { "type": "string" },
+        "status": { "type": "string" },
+        "priority": { "type": "string" },
+        "type": { "type": "string" },
+        "clientId": { "type": "string" },
+        "leadId": { "type": "string" },
+        "associatedName": { "type": "string" },
+        "opportunityId": { "type": "string" },
+        "opportunityValue": { "type": "number" }
+      },
+      "required": ["id", "title", "dueDate", "salespersonId", "status", "priority", "type"]
+    },
+    "Interaction": {
+      "title": "Interaction",
+      "description": "Represents a contact or interaction with a customer/lead",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "leadId": { "type": "string" },
+        "opportunityId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "salespersonId": { "type": "string" },
+        "type": { "type": "string" },
+        "notes": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "salespersonId", "type", "notes", "date"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Represents a product offered",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "currency": { "type": "string" }
+      },
+      "required": ["id", "name", "price"]
+    },
+    "Salesperson": {
+      "title": "Salesperson",
+      "description": "Represents a salesperson in the CRM",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "WhatsAppTemplate": {
+      "title": "WhatsAppTemplate",
+      "description": "Represents a WhatsApp message template",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "content": { "type": "string" }
+      },
+      "required": ["id", "name", "content"]
+    }
+  },
+  "firestore": {
+    "leads": {
+      "schema": "Lead",
+      "description": "Collection of leads"
+    },
+    "clients": {
+      "schema": "Client",
+      "description": "Collection of converted clients"
+    },
+    "opportunities": {
+      "schema": "Opportunity",
+      "description": "Collection of sales opportunities"
+    },
+    "tasks": {
+      "schema": "Task",
+      "description": "Collection of tasks"
+    },
+    "interactions": {
+      "schema": "Interaction",
+      "description": "Collection of interactions"
+    },
+    "products": {
+      "schema": "Product",
+      "description": "Collection of products"
+    },
+    "salespeople": {
+      "schema": "Salesperson",
+      "description": "Collection of salespeople"
+    },
+    "whatsappTemplates": {
+      "schema": "WhatsAppTemplate",
+      "description": "Collection of WhatsApp templates"
+    }
+  }
+}

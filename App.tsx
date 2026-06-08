@@ -6,11 +6,12 @@ import type { Client, Lead, Product, Task, SupportTicket, Salesperson, Interacti
 import { LeadStatus, OpportunityStage, TaskStatus, TaskPriority, TaskType } from './types';
 
 import Panel from './components/Dashboard';
-import Clients from './components/Clients';
-import Listado from './components/Leads';
-import Opportunities from './components/Sales';
+import Ventas from './components/Clients';
+import Clientes from './components/Leads';
+import Prospectos from './components/Sales';
 import Salespeople from './components/Salespeople';
 import Products from './components/Products';
+import AiCampaigns from './components/AiCampaigns';
 import Agenda from './components/Agenda';
 import Support from './components/Support';
 import WhatsAppTemplates from './components/WhatsAppTemplates';
@@ -27,6 +28,7 @@ import TagIcon from './components/TagIcon';
 import BriefcaseIcon from './components/icons/BriefcaseIcon';
 import UserIcon from './components/icons/UserIcon';
 import CubeIcon from './components/icons/CubeIcon';
+import SparklesIcon from './components/icons/SparklesIcon';
 import CalendarIcon from './components/icons/CalendarIcon';
 import WrenchScrewdriverIcon from './components/icons/WrenchScrewdriverIcon';
 import MenuIcon from './components/icons/MenuIcon';
@@ -72,18 +74,53 @@ function useLocalStorage<T>(key: string, initialValue: T | (() => T)): [T, React
     return [storedValue, setStoredValue];
 }
 
+import { 
+    subscribeToCollection, 
+    saveDocument, 
+    addDocument, 
+    deleteDocument, 
+    auth, 
+    signInWithGoogle, 
+    logout 
+} from './services/firebaseService';
+import { onAuthStateChanged } from 'firebase/auth';
+
 const App: React.FC = () => {
-    // Main data store (Single Source of Truth) - backed by localStorage
-    const [mainClients, setMainClients] = useLocalStorage<Client[]>('crm_main_clients', DUMMY_CLIENTS);
-    const [mainLeads, setMainLeads] = useLocalStorage<Lead[]>('crm_main_leads', DUMMY_LEADS);
-    const [mainProducts, setMainProducts] = useLocalStorage<Product[]>('crm_main_products', DUMMY_PRODUCTS);
-    const [mainOpportunities, setMainOpportunities] = useLocalStorage<Opportunity[]>('crm_main_opportunities', DUMMY_OPPORTUNITIES);
-    const [mainTasks, setMainTasks] = useLocalStorage<Task[]>('crm_main_tasks', DUMMY_TASKS);
-    const [mainSupportTickets, setMainSupportTickets] = useLocalStorage<SupportTicket[]>('crm_main_support_tickets', DUMMY_SUPPORT_TICKETS);
-    const [mainSalespeople, setMainSalespeople] = useLocalStorage<Salesperson[]>('crm_main_salespeople', DUMMY_SALESPEOPLE);
-    const [mainInteractions, setMainInteractions] = useLocalStorage<Interaction[]>('crm_main_interactions', DUMMY_INTERACTIONS);
-    const [mainWhatsAppTemplates, setMainWhatsAppTemplates] = useLocalStorage<WhatsAppTemplate[]>('crm_main_whatsapp_templates', DUMMY_WHATSAPP_TEMPLATES);
-    const [users, setUsers] = useLocalStorage<User[]>('crm_users', DUMMY_USERS);
+    // Main data store (Single Source of Truth)
+    const [mainClients, setMainClients] = useLocalStorage<Client[]>('crm_clients', []);
+    const [mainLeads, setMainLeads] = useLocalStorage<Lead[]>('crm_leads', []);
+    const [mainProducts, setMainProducts] = useLocalStorage<Product[]>('crm_products', []);
+    const [mainOpportunities, setMainOpportunities] = useLocalStorage<Opportunity[]>('crm_opportunities', []);
+    const [mainTasks, setMainTasks] = useLocalStorage<Task[]>('crm_tasks', []);
+    const [mainSupportTickets, setMainSupportTickets] = useLocalStorage<SupportTicket[]>('crm_tickets', []);
+    const [mainSalespeople, setMainSalespeople] = useLocalStorage<Salesperson[]>('crm_salespeople', []);
+    const [mainInteractions, setMainInteractions] = useLocalStorage<Interaction[]>('crm_interactions', []);
+    const [mainWhatsAppTemplates, setMainWhatsAppTemplates] = useLocalStorage<WhatsAppTemplate[]>('crm_whatsapp_templates', []);
+    const [users, setUsers] = useState<User[]>(DUMMY_USERS); // Users managed via auth/admin mainly, keeping dummy as base for local login if needed or migration
+
+    useEffect(() => {
+        const unsubClients = subscribeToCollection<Client>('clients', setMainClients);
+        const unsubLeads = subscribeToCollection<Lead>('leads', setMainLeads);
+        const unsubProducts = subscribeToCollection<Product>('products', setMainProducts);
+        const unsubOpps = subscribeToCollection<Opportunity>('opportunities', setMainOpportunities);
+        const unsubTasks = subscribeToCollection<Task>('tasks', setMainTasks);
+        const unsubTickets = subscribeToCollection<SupportTicket>('supportTickets', setMainSupportTickets);
+        const unsubSalespeople = subscribeToCollection<Salesperson>('salespeople', setMainSalespeople);
+        const unsubInteractions = subscribeToCollection<Interaction>('interactions', setMainInteractions);
+        const unsubTemplates = subscribeToCollection<WhatsAppTemplate>('whatsappTemplates', setMainWhatsAppTemplates);
+
+        return () => {
+            unsubClients();
+            unsubLeads();
+            unsubProducts();
+            unsubOpps();
+            unsubTasks();
+            unsubTickets();
+            unsubSalespeople();
+            unsubInteractions();
+            unsubTemplates();
+        };
+    }, []);
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
@@ -375,7 +412,7 @@ const App: React.FC = () => {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
                 const text = e.target?.result;
                 if (typeof text !== 'string') throw new Error("File could not be read.");
@@ -389,37 +426,27 @@ const App: React.FC = () => {
                     throw new Error(`Este backup pertenece a otro vendedor (${data.sourceSalespersonId}) y no puede ser importado.`);
                 }
                 
-                // Safe merge function: Keep local data, add only new items from backup (based on ID)
-                const safeMerge = <T extends {id: string}>(local: T[], incoming: T[]): T[] => {
+                // Persistent merge: Save each new item to Firestore
+                const persistentMerge = async <T extends {id: string}>(collectionName: string, local: T[], incoming: T[]) => {
                     const localIds = new Set(local.map(item => item.id));
                     const newItems = incoming.filter(item => !localIds.has(item.id));
-                    return [...local, ...newItems];
+                    
+                    for (const item of newItems) {
+                        await saveDocument(collectionName, item.id, item);
+                    }
+                    return newItems.length;
                 };
                 
-                setMainClients(prev => safeMerge(prev, data.clients));
-                setMainLeads(prev => safeMerge(prev, data.leads));
-                setMainProducts(prev => safeMerge(prev, data.products));
-                setMainOpportunities(prev => safeMerge(prev, data.opportunities));
-                setMainTasks(prev => safeMerge(prev, data.tasks));
-                setMainSupportTickets(prev => safeMerge(prev, data.supportTickets));
-                setMainSalespeople(prev => safeMerge(prev, data.salespeople));
-                setMainInteractions(prev => safeMerge(prev, data.interactions));
+                const clientsAdded = await persistentMerge('clients', mainClients, data.clients);
+                const leadsAdded = await persistentMerge('leads', mainLeads, data.leads);
+                const prodsAdded = await persistentMerge('products', mainProducts, data.products || []);
+                const oppsAdded = await persistentMerge('opportunities', mainOpportunities, data.opportunities || []);
+                const tasksAdded = await persistentMerge('tasks', mainTasks, data.tasks || []);
+                const ticketsAdded = await persistentMerge('supportTickets', mainSupportTickets, data.supportTickets || []);
+                const interactionsAdded = await persistentMerge('interactions', mainInteractions, data.interactions || []);
+                const templatesAdded = await persistentMerge('whatsappTemplates', mainWhatsAppTemplates, data.whatsappTemplates || []);
                 
-                // MERGE templates instead of replacing them.
-                setMainWhatsAppTemplates(prev => {
-                    const incomingTemplates = data.whatsappTemplates || [];
-                    const mergedMap = new Map(prev.map(t => [t.id, t]));
-                    // For templates, we might want to allow updates if they are system templates?
-                    // But sticking to the rule "no overwrite":
-                    incomingTemplates.forEach(t => {
-                        if (!mergedMap.has(t.id)) {
-                            mergedMap.set(t.id, t);
-                        }
-                    });
-                    return Array.from(mergedMap.values());
-                });
-
-                alert('Los datos del administrador han sido importados y anexados correctamente (sin sobrescribir existentes).');
+                alert(`Backup importado con éxito: ${clientsAdded + leadsAdded + prodsAdded + oppsAdded + tasksAdded + ticketsAdded + interactionsAdded + templatesAdded} nuevos registros añadidos.`);
 
             } catch (err: any) {
                 alert(`Error al importar: ${err.message}`);
@@ -456,40 +483,51 @@ const App: React.FC = () => {
         link.click();
     };
     
-    const handleMergeSalespersonData = (data: BackupData) => {
+    const handleMergeSalespersonData = async (data: BackupData) => {
         if (currentUser?.role !== 'admin') return;
         
-        // Safe merge: Keep main data, append only new items from localData
-        const safeMerge = <T extends {id: string}>(mainData: T[], localData: T[]): T[] => {
+        // Persistent merge for admin
+        const persistentMerge = async <T extends {id: string}>(collectionName: string, mainData: T[], localData: T[]) => {
             const mainIds = new Set(mainData.map(item => item.id));
             const newItems = localData.filter(item => !mainIds.has(item.id));
-            return [...mainData, ...newItems];
+            
+            for (const item of newItems) {
+                await saveDocument(collectionName, item.id, item);
+            }
+            return newItems.length;
         };
         
-        setMainClients(prev => safeMerge(prev, data.clients));
-        setMainLeads(prev => safeMerge(prev, data.leads));
-        setMainOpportunities(prev => safeMerge(prev, data.opportunities));
-        setMainTasks(prev => safeMerge(prev, data.tasks));
-        setMainInteractions(prev => safeMerge(prev, data.interactions));
-        setMainWhatsAppTemplates(prev => safeMerge(prev, data.whatsappTemplates || []));
+        const cCount = await persistentMerge('clients', mainClients, data.clients || []);
+        const lCount = await persistentMerge('leads', mainLeads, data.leads || []);
+        const pCount = await persistentMerge('products', mainProducts, data.products || []);
+        const oCount = await persistentMerge('opportunities', mainOpportunities, data.opportunities || []);
+        const tCount = await persistentMerge('tasks', mainTasks, data.tasks || []);
+        const iCount = await persistentMerge('interactions', mainInteractions, data.interactions || []);
+        const sCount = await persistentMerge('supportTickets', mainSupportTickets, data.supportTickets || []);
+        const wCount = await persistentMerge('whatsappTemplates', mainWhatsAppTemplates, data.whatsappTemplates || []);
         
-        alert("Los datos han sido anexados con éxito (sin sobrescribir existentes).");
+        alert(`Los datos han sido anexados con éxito. Registros añadidos: ${cCount + lCount + pCount + oCount + tCount + iCount + sCount + wCount}.`);
     };
 
     // --- Memoized CRUD Functions ---
-    const addClient = useCallback((clientData: Omit<Client, 'id'>) => {
-        const newClient: Client = { ...clientData, id: `cli-${Date.now()}`, createdAt: new Date().toISOString() };
+    const addClient = useCallback(async (clientData: Omit<Client, 'id'>) => {
+        const id = `cli-${Date.now()}`;
+        const newClient: Client = { ...clientData, id, createdAt: new Date().toISOString() };
         setMainClients(prev => [newClient, ...prev]);
+        saveDocument('clients', id, newClient).catch(console.error);
         return newClient;
     }, []);
 
-    const updateClient = useCallback((updatedClient: Client) => {
+    const updateClient = useCallback(async (updatedClient: Client) => {
         setMainClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
+        saveDocument('clients', updatedClient.id, updatedClient).catch(console.error);
     }, []);
     
-    const deleteClient = useCallback((clientId: string) => {
+    const deleteClient = useCallback(async (clientId: string) => {
         const clientToDelete = mainClients.find(c => c.id === clientId);
         if (!clientToDelete) return;
+
+        setMainClients(prev => prev.filter(c => c.id !== clientId));
 
         const clientNameToDeleteLower = clientToDelete.name.toLowerCase();
 
@@ -501,337 +539,294 @@ const App: React.FC = () => {
             .filter(l => l.company.toLowerCase() === clientNameToDeleteLower)
             .map(l => l.id);
 
-        setMainClients(prev => prev.filter(c => c.id !== clientId));
-        setMainOpportunities(prev => prev.filter(o => !opportunitiesToDeleteIds.includes(o.id)));
-        setMainLeads(prev => prev.filter(l => !leadsToDeleteIds.includes(l.id)));
-        setMainTasks(prev => prev.filter(t => t.clientId !== clientId && !opportunitiesToDeleteIds.includes(t.opportunityId || '')));
-        setMainSupportTickets(prev => prev.filter(t => t.clientId !== clientId));
-        setMainInteractions(prev => prev.filter(i => 
-            !opportunitiesToDeleteIds.includes(i.opportunityId || '') &&
-            !leadsToDeleteIds.includes(i.leadId || '')
-        ));
+        await deleteDocument('clients', clientId);
+        for (const id of opportunitiesToDeleteIds) await deleteDocument('opportunities', id);
+        for (const id of leadsToDeleteIds) await deleteDocument('leads', id);
     }, [mainClients, mainLeads, mainOpportunities]);
 
-    const addLead = useCallback((leadData: Omit<Lead, 'id'>) => {
+    const addLead = useCallback(async (leadData: Omit<Lead, 'id'>) => {
+        const id = `lead-${Date.now()}`;
         const newLead: Lead = { 
             ...leadData, 
-            id: `lead-${Date.now()}`, 
+            id, 
             salespersonId: leadData.salespersonId || currentUser?.id || '', 
             createdAt: new Date().toISOString(),
-            isUnread: true // New leads are always unread
+            isUnread: true 
         };
         setMainLeads(prev => [newLead, ...prev]);
+        saveDocument('leads', id, newLead).catch(console.error);
     }, [currentUser]);
 
-    const updateLead = useCallback((updatedLead: Lead) => {
-        setMainLeads(prev => prev.map(l => {
-            if (l.id === updatedLead.id) {
-                // Check if the salesperson has been changed (reassigned)
-                const isReassigned = l.salespersonId !== updatedLead.salespersonId;
-                if (isReassigned) {
-                    // Force unread if reassigned
-                    return { ...updatedLead, isUnread: true };
-                }
-                return updatedLead;
-            }
-            return l;
-        }));
-    }, []);
+    const updateLead = useCallback(async (updatedLead: Lead) => {
+        const original = mainLeads.find(l => l.id === updatedLead.id);
+        if (original && original.salespersonId !== updatedLead.salespersonId) {
+            updatedLead.isUnread = true;
+        }
+        setMainLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+        saveDocument('leads', updatedLead.id, updatedLead).catch(console.error);
+    }, [mainLeads]);
 
-    const bulkUpdateLeads = useCallback((leadsToUpdate: Lead[]) => {
+    const bulkUpdateLeads = useCallback(async (leadsToUpdate: Lead[]) => {
         setMainLeads(prev => {
-            const updatesMap = new Map(leadsToUpdate.map(l => [l.id, l]));
-            return prev.map(l => {
-                if (updatesMap.has(l.id)) {
-                    const updatedLead = updatesMap.get(l.id)!;
-                    const isReassigned = l.salespersonId !== updatedLead.salespersonId;
-                    if (isReassigned) {
-                        return { ...updatedLead, isUnread: true };
-                    }
-                    return updatedLead;
-                }
-                return l;
-            });
+            const updatedMap = new Map(leadsToUpdate.map(l => [l.id, l]));
+            return prev.map(l => updatedMap.has(l.id) ? updatedMap.get(l.id)! : l);
         });
-    }, []);
-    
-    const deleteLead = useCallback((leadId: string) => {
-        setMainLeads(prev => prev.filter(l => l.id !== leadId));
-        setMainInteractions(prev => prev.filter(i => i.leadId !== leadId));
-    }, []);
-
-    const addProduct = useCallback((productData: Omit<Product, 'id'>) => {
-        const newProduct: Product = { ...productData, id: `prod-${Date.now()}` };
-        setMainProducts(prev => [newProduct, ...prev]);
-    }, []);
-
-    const updateProduct = useCallback((updatedProduct: Product) => {
-        setMainProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-    }, []);
-    
-    const deleteProduct = useCallback((productId: string) => {
-        setMainProducts(prev => prev.filter(p => p.id !== productId));
-        setMainOpportunities(prevOpps => 
-            prevOpps.map(opp => {
-                const productsBefore = opp.products.length;
-                const updatedProducts = opp.products.filter(p => p.productId !== productId);
-                if (updatedProducts.length < productsBefore) {
-                    const newValue = updatedProducts.reduce((sum, p) => sum + p.price * p.quantity, 0);
-                    return { ...opp, products: updatedProducts, value: newValue };
-                }
-                return opp;
-            })
-        );
-    }, []);
-    
-    const addOpportunity = useCallback((oppData: Omit<Opportunity, 'id' | 'clientName'>, explicitClientName?: string): Opportunity | null => {
-        const clientName = explicitClientName || mainClients.find(c => c.id === oppData.clientId)?.name;
-        if (!clientName) {
-            console.error("Client name could not be determined for opportunity.");
-            return null;
-        };
-
-        const opportunityId = `opp-${Date.now()}`;
         
-        const newOpportunity: Opportunity = { 
+        for (const lead of leadsToUpdate) {
+            const original = mainLeads.find(l => l.id === lead.id);
+            if (original && original.salespersonId !== lead.salespersonId) {
+                lead.isUnread = true;
+            }
+            saveDocument('leads', lead.id, lead).catch(console.error);
+        }
+    }, [mainLeads]);
+    
+    const deleteLead = useCallback(async (leadId: string) => {
+        setMainLeads(prev => prev.filter(l => l.id !== leadId));
+        deleteDocument('leads', leadId).catch(console.error);
+    }, []);
+
+    const addProduct = useCallback(async (productData: Omit<Product, 'id'>) => {
+        const id = `prod-${Date.now()}`;
+        const newProduct: Product = { ...productData, id };
+        
+        // Optimistic update
+        setMainProducts(prev => [newProduct, ...prev]);
+        
+        // Background sync
+        saveDocument('products', id, newProduct).catch(e => {
+            console.error("Failed to sync new product:", e);
+        });
+    }, [setMainProducts]);
+
+    const updateProduct = useCallback(async (updatedProduct: Product) => {
+         // Optimistic update
+         setMainProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+         
+         // Background sync
+         saveDocument('products', updatedProduct.id, updatedProduct).catch(e => {
+            console.error("Failed to sync updated product:", e);
+         });
+    }, [setMainProducts]);
+
+    const deleteProduct = useCallback(async (productId: string) => {
+        setMainProducts(prev => prev.filter(p => p.id !== productId));
+        deleteDocument('products', productId).catch(console.error);
+    }, []);
+
+    const addOpportunity = useCallback(async (oppData: Omit<Opportunity, 'id' | 'clientName'>, explicitClientName?: string) => {
+        let clientName = explicitClientName || '';
+        if (oppData.clientId && !clientName) {
+            const client = mainClients.find(c => c.id === oppData.clientId);
+            if (client) clientName = client.name;
+        } else if (!clientName) {
+             const lead = mainLeads.find(l => l.id === oppData.originalLeadId);
+             if (lead) clientName = lead.name;
+        }
+        
+        const opportunityId = `opp-${Date.now()}`;
+        const newOpp: Opportunity = { 
             ...oppData, 
-            id: opportunityId,
-            clientName: clientName,
-            salespersonId: oppData.salespersonId || currentUser?.id || '',
+            id: opportunityId, 
+            clientName: clientName || 'Desconocido', 
             createdAt: new Date().toISOString(),
+            salespersonId: oppData.salespersonId || currentUser?.id || ''
         };
-        setMainOpportunities(prev => [newOpportunity, ...prev]);
+        setMainOpportunities(prev => [newOpp, ...prev]);
+        saveDocument('opportunities', opportunityId, newOpp).catch(console.error);
         
         const newOpportunityTask: Task = {
             id: `task-opp-${opportunityId}`,
-            title: `Cierre Oportunidad: ${clientName}`,
-            description: `Valor estimado: €${newOpportunity.value.toLocaleString('es-ES')}`,
-            dueDate: newOpportunity.closeDate,
-            salespersonId: newOpportunity.salespersonId,
+            title: `Cierre Oportunidad: ${newOpp.clientName}`,
+            description: `Valor estimado: €${newOpp.value.toLocaleString('es-ES')}`,
+            dueDate: newOpp.closeDate,
+            salespersonId: newOpp.salespersonId,
             status: TaskStatus.PENDIENTE,
             priority: TaskPriority.ALTA,
             type: TaskType.RECORDATORIO,
-            opportunityId: newOpportunity.id,
-            opportunityValue: newOpportunity.value,
-            clientId: newOpportunity.clientId,
-            associatedName: newOpportunity.clientName,
+            opportunityId: newOpp.id,
+            opportunityValue: newOpp.value,
+            clientId: newOpp.clientId,
+            associatedName: newOpp.clientName,
         };
         setMainTasks(prev => [newOpportunityTask, ...prev]);
-        return newOpportunity;
-    }, [currentUser, mainClients]);
+        saveDocument('tasks', newOpportunityTask.id, newOpportunityTask).catch(console.error);
+        return newOpp;
+    }, [mainClients, mainLeads, currentUser, setMainOpportunities, setMainTasks]);
 
-    const updateOpportunity = useCallback((updatedOpportunity: Opportunity) => {
-        let clientToUse: Client | undefined;
-        let finalOppData = { ...updatedOpportunity };
-
-        // Ensure we find or create a client if the opportunity is WON
-        if (finalOppData.stage === OpportunityStage.GANADA && !finalOppData.clientId) {
-            let existingClient = mainClients.find(c => c.name.toLowerCase() === finalOppData.clientName.toLowerCase());
-            
-            if (existingClient) {
-                clientToUse = existingClient;
-            } else {
-                // Try to find the original lead to get contact details
-                const originalLead = finalOppData.originalLeadId ? mainLeads.find(l => l.id === finalOppData.originalLeadId) : null;
-                clientToUse = addClient({
-                    name: finalOppData.clientName,
-                    contactPerson: originalLead?.name || 'N/A',
-                    email: originalLead?.email || 'N/A',
-                    phone: originalLead?.phone || 'N/A',
-                    address: '',
-                });
-            }
-            
-            if (clientToUse) {
-                finalOppData.clientId = clientToUse.id;
-                finalOppData.clientName = clientToUse.name;
-            }
-        } else if (finalOppData.clientId) {
-            clientToUse = mainClients.find(c => c.id === finalOppData.clientId);
-        }
-        
-        const clientNameForUpdate = clientToUse ? clientToUse.name : finalOppData.clientName;
-        const fullyUpdatedOpp = { ...finalOppData, clientName: clientNameForUpdate };
-        
-        setMainOpportunities(prev => prev.map(o => o.id === fullyUpdatedOpp.id ? fullyUpdatedOpp : o));
-
-        setMainTasks(prevTasks => {
-            const taskIndex = prevTasks.findIndex(t => t.opportunityId === fullyUpdatedOpp.id);
-            const taskData = {
-                title: `Cierre Oportunidad: ${fullyUpdatedOpp.clientName}`,
-                description: `Valor estimado: €${fullyUpdatedOpp.value.toLocaleString('es-ES')}`,
-                dueDate: fullyUpdatedOpp.closeDate,
-                salespersonId: fullyUpdatedOpp.salespersonId,
-                clientId: fullyUpdatedOpp.clientId,
-                associatedName: fullyUpdatedOpp.clientName,
-                opportunityValue: fullyUpdatedOpp.value,
-            };
-            if (taskIndex > -1) {
-                const newTasks = [...prevTasks];
-                newTasks[taskIndex] = { ...newTasks[taskIndex], ...taskData };
-                return newTasks;
-            }
-            const newOpportunityTask: Task = {
-                id: `task-opp-${fullyUpdatedOpp.id}`,
-                status: TaskStatus.PENDIENTE,
-                priority: TaskPriority.ALTA,
-                type: TaskType.RECORDATORIO,
-                opportunityId: fullyUpdatedOpp.id,
-                ...taskData,
-            };
-            return [...prevTasks, newOpportunityTask];
-        });
-    }, [addClient, mainClients, mainLeads]);
-    
-    const deleteOpportunity = useCallback((opportunityId: string) => {
-        setMainOpportunities(prev => prev.filter(o => o.id !== opportunityId));
-        setMainTasks(prev => prev.filter(t => t.opportunityId !== opportunityId));
-        setMainInteractions(prev => prev.filter(i => i.opportunityId !== opportunityId));
-    }, []);
-
-    const addInteraction = useCallback((interactionData: Omit<Interaction, 'id' | 'date'>) => {
-        const now = new Date();
-        const newInteraction: Interaction = { 
-            ...interactionData, 
-            id: `int-${now.getTime()}`,
-            date: now.toISOString(),
-            salespersonId: interactionData.salespersonId || currentUser?.id || '',
+    const updateOpportunity = useCallback(async (updatedOpp: Opportunity) => {
+        setMainOpportunities(prev => prev.map(o => o.id === updatedOpp.id ? updatedOpp : o));
+        saveDocument('opportunities', updatedOpp.id, updatedOpp).catch(console.error);
+        const taskData = {
+            title: `Cierre Oportunidad: ${updatedOpp.clientName}`,
+            description: `Valor estimado: €${updatedOpp.value.toLocaleString('es-ES')}`,
+            dueDate: updatedOpp.closeDate,
+            salespersonId: updatedOpp.salespersonId,
+            clientId: updatedOpp.clientId,
+            associatedName: updatedOpp.clientName,
+            opportunityValue: updatedOpp.value,
         };
-        setMainInteractions(prev => [newInteraction, ...prev]);
-        
-        if (interactionData.leadId) {
-            setMainLeads(prevLeads => prevLeads.map(lead => 
-                lead.id === interactionData.leadId 
-                    ? { ...lead, lastInteractionDate: now.toISOString().split('T')[0] } 
-                    : lead
-            ));
+        setMainTasks(prev => prev.map(t => t.id === `task-opp-${updatedOpp.id}` ? { ...t, ...taskData } : t));
+        saveDocument('tasks', `task-opp-${updatedOpp.id}`, taskData).catch(console.error);
+    }, [setMainOpportunities, setMainTasks]);
+
+    const deleteOpportunity = useCallback(async (oppId: string) => {
+        setMainOpportunities(prev => prev.filter(o => o.id !== oppId));
+        setMainTasks(prev => prev.filter(t => t.id !== `task-opp-${oppId}`));
+        deleteDocument('opportunities', oppId).catch(console.error);
+        deleteDocument('tasks', `task-opp-${oppId}`).catch(console.error);
+    }, [setMainOpportunities, setMainTasks]);
+
+    const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'associatedName' | 'opportunityValue'> & { associatedName?: string, opportunityValue?: number }) => {
+        let associatedName = taskData.associatedName || '';
+        let opportunityValue = taskData.opportunityValue;
+
+        if (taskData.clientId) {
+            const client = mainClients.find(c => c.id === taskData.clientId);
+            if (client) associatedName = client.name;
+        } else if (taskData.leadId) {
+            const lead = mainLeads.find(l => l.id === taskData.leadId);
+            if (lead) associatedName = lead.name;
+        } else if (taskData.opportunityId) {
+            const opp = mainOpportunities.find(o => o.id === taskData.opportunityId);
+            if (opp) {
+                associatedName = opp.clientName;
+                opportunityValue = opp.value;
+            }
         }
-    }, [currentUser]);
-    
-    const updateInteraction = useCallback((updatedInteraction: Interaction) => {
-        setMainInteractions(prev => prev.map(i => i.id === updatedInteraction.id ? updatedInteraction : i));
-    }, []);
 
-    const deleteInteraction = useCallback((interactionId: string) => {
-        setMainInteractions(prev => prev.filter(i => i.id !== interactionId));
-    }, []);
-
-
-    const addTask = useCallback((taskData: Omit<Task, 'id' | 'associatedName' | 'opportunityValue'>) => {
-        const client = taskData.clientId ? mainClients.find(c => c.id === taskData.clientId) : undefined;
-        const lead = taskData.leadId ? mainLeads.find(l => l.id === taskData.leadId) : undefined;
-        const opportunity = taskData.opportunityId ? mainOpportunities.find(o => o.id === taskData.opportunityId) : undefined;
+        const id = `task-${Date.now()}`;
         const newTask: Task = {
             ...taskData,
-            id: `task-${Date.now()}`,
-            associatedName: opportunity?.clientName || client?.name || lead?.name,
+            id,
+            associatedName,
+            opportunityValue,
             salespersonId: taskData.salespersonId || currentUser?.id || ''
         };
         setMainTasks(prev => [newTask, ...prev]);
-    }, [currentUser, mainClients, mainLeads, mainOpportunities]);
+        saveDocument('tasks', id, newTask).catch(console.error);
+    }, [mainClients, mainLeads, mainOpportunities, currentUser, setMainTasks]);
 
-    const updateTask = useCallback((updatedTask: Task) => {
-        const client = updatedTask.clientId ? mainClients.find(c => c.id === updatedTask.clientId) : undefined;
-        const lead = updatedTask.leadId ? mainLeads.find(l => l.id === updatedTask.leadId) : undefined;
-        const opportunity = updatedTask.opportunityId ? mainOpportunities.find(o => o.id === updatedTask.opportunityId) : undefined;
-        const fullyUpdatedTask = { ...updatedTask, associatedName: opportunity?.clientName || client?.name || lead?.name };
-        setMainTasks(prev => prev.map(t => t.id === updatedTask.id ? fullyUpdatedTask : t));
-    }, [mainClients, mainLeads, mainOpportunities]);
+    const updateTask = useCallback(async (updatedTask: Task) => {
+        setMainTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+        saveDocument('tasks', updatedTask.id, updatedTask).catch(console.error);
+    }, [setMainTasks]);
 
-    const deleteTask = useCallback((taskId: string) => {
+    const deleteTask = useCallback(async (taskId: string) => {
         setMainTasks(prev => prev.filter(t => t.id !== taskId));
-    }, []);
-    
-    const addTicket = useCallback((ticketData: Omit<SupportTicket, 'id' | 'clientName' | 'createdDate'>) => {
+        deleteDocument('tasks', taskId).catch(console.error);
+    }, [setMainTasks]);
+
+    const addSalesperson = useCallback(async (spData: Omit<Salesperson, 'id'>, password: string) => {
+        const id = `sp-${Date.now()}`;
+        const newSp: Salesperson = { ...spData, id };
+        const newUser: User = { ...newSp, role: 'salesperson', password_DO_NOT_USE: password, mustChangePassword: true };
+        setMainSalespeople(prev => [newSp, ...prev]);
+        saveDocument('salespeople', id, newSp).catch(console.error);
+        setUsers(prev => [newUser, ...prev]);
+    }, [setMainSalespeople]);
+
+    const updateSalesperson = useCallback(async (updatedSp: Salesperson, newPassword?: string) => {
+        setMainSalespeople(prev => prev.map(s => s.id === updatedSp.id ? updatedSp : s));
+        saveDocument('salespeople', updatedSp.id, updatedSp).catch(console.error);
+        if (newPassword) {
+             setUsers(prev => prev.map(u => u.id === updatedSp.id ? { ...u, ...updatedSp, password_DO_NOT_USE: newPassword } : u));
+        }
+    }, [setMainSalespeople]);
+
+    const deleteSalesperson = useCallback(async (spId: string) => {
+        setMainSalespeople(prev => prev.filter(s => s.id !== spId));
+        deleteDocument('salespeople', spId).catch(console.error);
+    }, [setMainSalespeople]);
+
+    const addInteraction = useCallback(async (interactionData: Omit<Interaction, 'id' | 'date'>) => {
+        const now = new Date();
+        const id = `int-${now.getTime()}`;
+        const newInteraction: Interaction = {
+            ...interactionData,
+            id,
+            date: now.toISOString(),
+            salespersonId: interactionData.salespersonId || currentUser?.id || ''
+        };
+        setMainInteractions(prev => [newInteraction, ...prev]);
+        saveDocument('interactions', id, newInteraction).catch(console.error);
+        
+        if (interactionData.leadId) {
+            const lead = mainLeads.find(l => l.id === interactionData.leadId);
+            if (lead) {
+                const updatedLead = { ...lead, lastInteractionDate: now.toISOString().split('T')[0] };
+                setMainLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+        saveDocument('leads', updatedLead.id, updatedLead).catch(console.error);
+            }
+        }
+    }, [currentUser, mainLeads, setMainInteractions, setMainLeads]);
+
+    const updateInteraction = useCallback(async (updatedInt: Interaction) => {
+        setMainInteractions(prev => prev.map(i => i.id === updatedInt.id ? updatedInt : i));
+        saveDocument('interactions', updatedInt.id, updatedInt).catch(console.error);
+    }, [setMainInteractions]);
+
+    const deleteInteraction = useCallback(async (intId: string) => {
+       setMainInteractions(prev => prev.filter(i => i.id !== intId));
+       deleteDocument('interactions', intId).catch(console.error);
+    }, [setMainInteractions]);
+
+    const addWhatsAppTemplate = useCallback(async (templateData: Omit<WhatsAppTemplate, 'id'>) => {
+        const id = `wa-${Date.now()}`;
+        const newTemplate: WhatsAppTemplate = { ...templateData, id };
+        setMainWhatsAppTemplates(prev => [newTemplate, ...prev]);
+        saveDocument('whatsappTemplates', id, newTemplate).catch(console.error);
+    }, [setMainWhatsAppTemplates]);
+
+    const updateWhatsAppTemplate = useCallback(async (updatedTemp: WhatsAppTemplate) => {
+        setMainWhatsAppTemplates(prev => prev.map(w => w.id === updatedTemp.id ? updatedTemp : w));
+        saveDocument('whatsappTemplates', updatedTemp.id, updatedTemp).catch(console.error);
+    }, [setMainWhatsAppTemplates]);
+
+    const deleteWhatsAppTemplate = useCallback(async (tempId: string) => {
+        setMainWhatsAppTemplates(prev => prev.filter(w => w.id !== tempId));
+        deleteDocument('whatsappTemplates', tempId).catch(console.error);
+    }, [setMainWhatsAppTemplates]);
+
+    const addTicket = useCallback(async (ticketData: Omit<SupportTicket, 'id' | 'clientName' | 'createdDate'>) => {
         const client = mainClients.find(c => c.id === ticketData.clientId);
         if (!client) return;
-        const newTicket: SupportTicket = { ...ticketData, id: `tic-${Date.now()}`, clientName: client.name, createdDate: new Date().toISOString().split('T')[0]};
+        const id = `tic-${Date.now()}`;
+        const newTicket: SupportTicket = { ...ticketData, id, clientName: client.name, createdDate: new Date().toISOString().split('T')[0]};
         setMainSupportTickets(prev => [newTicket, ...prev]);
-    }, [mainClients]);
+        saveDocument('supportTickets', id, newTicket).catch(console.error);
+    }, [mainClients, setMainSupportTickets]);
 
-    const updateTicket = useCallback((updatedTicket: SupportTicket) => {
+    const updateTicket = useCallback(async (updatedTicket: SupportTicket) => {
          const client = mainClients.find(c => c.id === updatedTicket.clientId);
          if (!client) return;
          const fullyUpdatedTicket = { ...updatedTicket, clientName: client.name };
-         setMainSupportTickets(prev => prev.map(t => t.id === updatedTicket.id ? fullyUpdatedTicket : t));
-    }, [mainClients]);
+         setMainSupportTickets(prev => prev.map(t => t.id === fullyUpdatedTicket.id ? fullyUpdatedTicket : t));
+        saveDocument('supportTickets', updatedTicket.id, fullyUpdatedTicket).catch(console.error);
+    }, [mainClients, setMainSupportTickets]);
 
-    const deleteTicket = useCallback((ticketId: string) => {
+    const deleteTicket = useCallback(async (ticketId: string) => {
         setMainSupportTickets(prev => prev.filter(t => t.id !== ticketId));
-    }, []);
+        deleteDocument('supportTickets', ticketId).catch(console.error);
+    }, [setMainSupportTickets]);
 
-    const addSalesperson = useCallback((salespersonData: Omit<Salesperson, 'id'>, password_DO_NOT_USE: string) => {
-        const newSalesperson: Salesperson = { ...salespersonData, id: `sales-${Date.now()}` };
-        setMainSalespeople(prev => [newSalesperson, ...prev]);
-        const newUser: User = { 
-            ...newSalesperson, 
-            role: 'salesperson', 
-            password_DO_NOT_USE,
-            mustChangePassword: true,
-        };
-        setUsers(prev => [...prev, newUser]);
-    }, []);
-
-    const updateSalesperson = useCallback((updatedSalesperson: Salesperson, password_DO_NOT_USE?: string) => {
-        setMainSalespeople(prev => prev.map(sp => sp.id === updatedSalesperson.id ? updatedSalesperson : sp));
-        setUsers(prev => prev.map(u => {
-            if (u.id === updatedSalesperson.id) {
-                const updatedUser: User = {
-                    ...u,
-                    ...updatedSalesperson,
-                };
-                if (password_DO_NOT_USE) {
-                    updatedUser.password_DO_NOT_USE = password_DO_NOT_USE;
-                    updatedUser.mustChangePassword = true;
-                }
-                return updatedUser;
-            }
-            return u;
-        }));
-    }, []);
-
-    const deleteSalesperson = useCallback((salespersonId: string) => {
-        setMainSalespeople(prev => prev.filter(sp => sp.id !== salespersonId));
-        setUsers(prev => prev.filter(u => u.id !== salespersonId));
-    
-        const adminId = 'ADM';
-        setMainLeads(prev => prev.map(l => l.salespersonId === salespersonId ? { ...l, salespersonId: adminId } : l));
-        setMainTasks(prev => prev.map(t => t.salespersonId === salespersonId ? { ...t, salespersonId: adminId } : t));
-        setMainOpportunities(prev => prev.map(o => o.salespersonId === salespersonId ? { ...o, salespersonId: adminId } : o));
-        setMainInteractions(prev => prev.map(i => i.salespersonId === salespersonId ? { ...i, salespersonId: adminId } : i));
-    }, []);
-
-    const addWhatsAppTemplate = useCallback((templateData: Omit<WhatsAppTemplate, 'id'>) => {
-        const newTemplate: WhatsAppTemplate = { ...templateData, id: `tmpl-${Date.now()}` };
-        setMainWhatsAppTemplates(prev => [newTemplate, ...prev]);
-    }, []);
-
-    const updateWhatsAppTemplate = useCallback((updatedTemplate: WhatsAppTemplate) => {
-        setMainWhatsAppTemplates(prev => prev.map(t => t.id === updatedTemplate.id ? updatedTemplate : t));
-    }, []);
-
-    const deleteWhatsAppTemplate = useCallback((templateId: string) => {
-        setMainWhatsAppTemplates(prev => prev.filter(t => t.id !== templateId));
-    }, []);
-
-    const convertLeadToOpportunity = useCallback((
+    const convertLeadToOpportunity = useCallback(async (
         leadId: string, 
         opportunityData: { products: OpportunityProduct[], closeDate: string, stage: OpportunityStage, salespersonId: string }
-    ): Opportunity | null => {
+    ) => {
         const lead = mainLeads.find(l => l.id === leadId);
         if (!lead) return null;
         
         const value = opportunityData.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
         let finalClientId = undefined;
 
-        // CRITICAL FIX: If stage is GANADA, create Client immediately so it appears in Clients list
         if (opportunityData.stage === OpportunityStage.GANADA) {
             const existingClient = mainClients.find(c => c.name.toLowerCase() === lead.company.toLowerCase());
             if (existingClient) {
                 finalClientId = existingClient.id;
             } else {
-                const newClient = addClient({
-                    name: lead.company || lead.name, // Fallback if no company
+                const newClient = await addClient({
+                    name: lead.company || lead.name,
                     contactPerson: lead.name,
                     email: lead.email,
                     phone: lead.phone,
@@ -841,7 +836,7 @@ const App: React.FC = () => {
             }
         }
 
-        const newOpp = addOpportunity({
+        const newOpp = await addOpportunity({
             products: opportunityData.products,
             closeDate: opportunityData.closeDate,
             salespersonId: opportunityData.salespersonId,
@@ -852,7 +847,7 @@ const App: React.FC = () => {
         }, lead.company || lead.name);
 
         if (newOpp) {
-            updateLead({ ...lead, status: LeadStatus.CALIFICADO });
+            await updateLead({ ...lead, status: LeadStatus.CALIFICADO });
         }
         
         return newOpp;
@@ -878,11 +873,12 @@ const App: React.FC = () => {
 
     const navItems = [
         { path: "/panel", icon: <ChartBarIcon className="h-5 w-5" />, label: "Panel" },
-        { path: "/listado", icon: <TagIcon className="h-5 w-5" />, label: "Listado" },
-        { path: "/opportunities", icon: <BriefcaseIcon className="h-5 w-5" />, label: "Oportunidades" },
-        { path: "/clients", icon: <UserGroupIcon className="h-5 w-5" />, label: "Clientes" },
+        { path: "/listado", icon: <TagIcon className="h-5 w-5" />, label: "Clientes" },
+        { path: "/opportunities", icon: <BriefcaseIcon className="h-5 w-5" />, label: "Prospectos" },
+        { path: "/clients", icon: <UserGroupIcon className="h-5 w-5" />, label: "Ventas" },
         { path: "/salespeople", icon: <UserIcon className="h-5 w-5" />, label: "Vendedores", adminOnly: true },
         { path: "/products", icon: <CubeIcon className="h-5 w-5" />, label: "Productos" },
+        { path: "/campaigns", icon: <SparklesIcon className="h-5 w-5" />, label: "Campañas IA" },
         { path: "/agenda", icon: <CalendarIcon className="h-5 w-5" />, label: "Agenda" },
         { path: "/whatsapp-prompts", icon: <ChatBubbleBottomCenterTextIcon className="h-5 w-5" />, label: "WhatsApp Prompts" },
         { path: "/support", icon: <WrenchScrewdriverIcon className="h-5 w-5" />, label: "Soporte" },
@@ -958,16 +954,40 @@ const App: React.FC = () => {
                             {/* This space is intentionally left for mobile layout balance, could add a logo here if needed */}
                         </div>
 
+                        <div className="flex items-center space-x-3 pr-2">
+                             <button
+                                onClick={() => setIsGlobalSearchOpen(true)}
+                                className="p-2 text-slate-400 hover:text-cyan-400 transition-colors"
+                                aria-label="Abrir Búsqueda Global"
+                            >
+                                <SearchIcon className="h-6 w-6" />
+                            </button>
+
+                            <ReactRouterDOM.Link
+                                to="/agenda"
+                                className="p-2 text-slate-400 hover:text-yellow-400 transition-colors relative"
+                                aria-label="Ver Tareas Pendientes"
+                            >
+                                <BellIcon className="h-6 w-6" />
+                                {pendingTasksCount > 0 && (
+                                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full border-2 border-slate-800">
+                                        {pendingTasksCount}
+                                    </span>
+                                )}
+                            </ReactRouterDOM.Link>
+                        </div>
+
                     </header>
                     <main className="flex-1 overflow-y-auto">
                         <ReactRouterDOM.Routes>
                             <ReactRouterDOM.Route path="/" element={<ReactRouterDOM.Navigate to="/panel" />} />
-                            <ReactRouterDOM.Route path="/panel" element={<Panel clientsCount={data.clients.length} leadsCount={data.leads.length} salespeopleCount={data.salespeople.length} productsCount={data.products.length} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} opportunities={data.opportunities} />}/>
-                            <ReactRouterDOM.Route path="/clients" element={<Clients clients={data.clients} updateClient={updateClient} deleteClient={deleteClient} opportunities={data.opportunities} salespeople={data.salespeople} interactions={data.interactions} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} currentUser={currentUser} />} />
-                            <ReactRouterDOM.Route path="/listado" element={<Listado user={currentUser} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} products={data.products} opportunities={data.opportunities} addLead={addLead} updateLead={updateLead} bulkUpdateLeads={bulkUpdateLeads} deleteLead={deleteLead} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} convertLeadToOpportunity={convertLeadToOpportunity} whatsappTemplates={data.whatsappTemplates} />} />
-                            <ReactRouterDOM.Route path="/opportunities" element={<Opportunities user={currentUser} opportunities={data.opportunities} clients={data.clients} products={data.products} salespeople={data.salespeople} addOpportunity={addOpportunity} updateOpportunity={updateOpportunity} deleteOpportunity={deleteOpportunity} interactions={data.interactions} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} leads={data.leads} />} />
+                            <ReactRouterDOM.Route path="/panel" element={<Panel clientsCount={data.clients.length} leadsCount={data.leads.length} salespeopleCount={data.salespeople.length} productsCount={data.products.length} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} opportunities={data.opportunities} tasks={data.tasks} />}/>
+                            <ReactRouterDOM.Route path="/clients" element={<Ventas clients={data.clients} addClient={addClient} updateClient={updateClient} deleteClient={deleteClient} opportunities={data.opportunities} salespeople={data.salespeople} interactions={data.interactions} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} currentUser={currentUser} />} />
+                            <ReactRouterDOM.Route path="/listado" element={<Clientes user={currentUser} leads={data.leads} salespeople={data.salespeople} interactions={data.interactions} products={data.products} opportunities={data.opportunities} addLead={addLead} updateLead={updateLead} bulkUpdateLeads={bulkUpdateLeads} deleteLead={deleteLead} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} convertLeadToOpportunity={convertLeadToOpportunity} whatsappTemplates={data.whatsappTemplates} />} />
+                            <ReactRouterDOM.Route path="/opportunities" element={<Prospectos user={currentUser} opportunities={data.opportunities} clients={data.clients} products={data.products} salespeople={data.salespeople} addOpportunity={addOpportunity} updateOpportunity={updateOpportunity} deleteOpportunity={deleteOpportunity} interactions={data.interactions} addInteraction={addInteraction} updateInteraction={updateInteraction} deleteInteraction={deleteInteraction} leads={data.leads} addTask={addTask} />} />
                             <ReactRouterDOM.Route path="/salespeople" element={<Salespeople salespeople={data.salespeople} leads={data.leads} tasks={data.tasks} addSalesperson={addSalesperson} updateSalesperson={updateSalesperson} deleteSalesperson={deleteSalesperson} />} />
                             <ReactRouterDOM.Route path="/products" element={<Products products={data.products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={deleteProduct} />} />
+                            <ReactRouterDOM.Route path="/campaigns" element={<AiCampaigns products={data.products} />} />
                             <ReactRouterDOM.Route path="/agenda" element={<Agenda user={currentUser} tasks={data.tasks} clients={data.clients} leads={data.leads} opportunities={data.opportunities} salespeople={data.salespeople} addTask={addTask} updateTask={updateTask} deleteTask={deleteTask} />} />
                             <ReactRouterDOM.Route path="/whatsapp-prompts" element={<WhatsAppTemplates templates={data.whatsappTemplates} addTemplate={addWhatsAppTemplate} updateTemplate={updateWhatsAppTemplate} deleteTemplate={deleteWhatsAppTemplate} />} />
                             <ReactRouterDOM.Route path="/support" element={<Support tickets={data.supportTickets} clients={data.clients} addTicket={addTicket} updateTicket={updateTicket} deleteTicket={deleteTicket} />} />
@@ -987,27 +1007,6 @@ const App: React.FC = () => {
                     </main>
                 </div>
             </div>
-            <ReactRouterDOM.Link
-                to="/agenda"
-                className="fixed bottom-4 right-20 sm:bottom-6 sm:right-24 bg-yellow-500 hover:bg-yellow-600 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-lg flex items-center justify-center transform transition-transform hover:scale-110 z-50 mr-2"
-                aria-label="Ver Tareas Pendientes"
-            >
-                <div className="relative">
-                    <BellIcon className="h-7 w-7 sm:h-8 sm:h-8" />
-                    {pendingTasksCount > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full border-2 border-slate-800 animate-pulse">
-                            {pendingTasksCount}
-                        </span>
-                    )}
-                </div>
-            </ReactRouterDOM.Link>
-             <button
-                onClick={() => setIsGlobalSearchOpen(true)}
-                className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-cyan-500 hover:bg-cyan-600 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-lg flex items-center justify-center transform transition-transform hover:scale-110 z-50"
-                aria-label="Abrir Búsqueda Global"
-            >
-                <SearchIcon className="h-7 w-7 sm:h-8 sm:h-8" />
-            </button>
             <GlobalSearch
                 isOpen={isGlobalSearchOpen}
                 onClose={() => setIsGlobalSearchOpen(false)}

@@ -125,14 +125,19 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, updateProduct
         setProductFormData(prev => ({ ...prev, image: '' }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (editingProduct) {
-            updateProduct({ ...editingProduct, ...productFormData });
-        } else {
-            addProduct(productFormData);
+        try {
+            if (editingProduct) {
+                await updateProduct({ ...editingProduct, ...productFormData });
+            } else {
+                await addProduct(productFormData);
+            }
+            handleCloseModal();
+        } catch (err) {
+            console.error(err);
+            alert("No se pudo guardar el producto. " + (err as Error).message);
         }
-        handleCloseModal();
     };
 
     const handleDeleteClick = (productId: string) => {

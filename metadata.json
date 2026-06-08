@@ -1,6 +1,9 @@
 {
-  "name": " Black Medical CRM 3.1",
-  "description": "An advanced CRM application designed for medical equipment sales teams to manage clients, leads, and sales pipelines, featuring an integrated search functionality.",
+  "name": "Black Medical CRM 3.1",
+  "description": "An advanced CRM application designed for medical equipment sales teams to manage clients, leads, and sales pipelines, featuring an integrated search functionality and AI assistance.",
   "requestFramePermissions": [],
-  "prompt": ""
+  "prompt": "",
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

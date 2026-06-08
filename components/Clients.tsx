@@ -11,8 +11,9 @@ import ChatBubbleLeftRightIcon from './icons/ChatBubbleLeftRightIcon';
 import ConfirmationModal from './ConfirmationModal';
 import InteractionsModal from './InteractionsModal';
 
-interface ClientsProps {
+interface VentasProps {
     clients: Client[];
+    addClient: (client: Omit<Client, 'id'>) => Promise<Client>;
     updateClient: (client: Client) => void;
     deleteClient: (clientId: string) => void;
     opportunities: Opportunity[];
@@ -24,8 +25,9 @@ interface ClientsProps {
     currentUser: User;
 }
 
-const Clients: React.FC<ClientsProps> = ({ 
+const Ventas: React.FC<VentasProps> = ({ 
     clients, 
+    addClient,
     updateClient, 
     deleteClient, 
     opportunities, 
@@ -93,26 +95,17 @@ const Clients: React.FC<ClientsProps> = ({
     }, [location.hash, navigate, clients]);
 
 
-    const activeClients = useMemo(() => {
-        const wonOppClientIds = new Set(
-            opportunities
-                .filter(opp => opp.stage === OpportunityStage.GANADA && opp.clientId)
-                .map(opp => opp.clientId!)
-        );
-        return clients.filter(client => wonOppClientIds.has(client.id));
-    }, [clients, opportunities]);
-
     const sortedActiveClients = useMemo(() => {
-        let list = [...activeClients];
+        let list = [...clients];
 
         if (searchTerm) {
             const lowerTerm = searchTerm.toLowerCase();
             list = list.filter(client => 
                 client.name.toLowerCase().includes(lowerTerm) ||
-                client.contactPerson.toLowerCase().includes(lowerTerm) ||
-                client.email.toLowerCase().includes(lowerTerm) ||
-                client.phone.includes(lowerTerm) ||
-                client.address.toLowerCase().includes(lowerTerm)
+                (client.contactPerson && client.contactPerson.toLowerCase().includes(lowerTerm)) ||
+                (client.email && client.email.toLowerCase().includes(lowerTerm)) ||
+                (client.phone && client.phone.includes(lowerTerm)) ||
+                (client.address && client.address.toLowerCase().includes(lowerTerm))
             );
         }
 
@@ -125,7 +118,7 @@ const Clients: React.FC<ClientsProps> = ({
                 return dateB - dateA;
             });
         }
-    }, [activeClients, sortBy, searchTerm]);
+    }, [clients, sortBy, searchTerm]);
 
     const handleOpenModal = (client: Client) => {
         setEditingClient(client);
@@ -144,12 +137,19 @@ const Clients: React.FC<ClientsProps> = ({
         setClientFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (editingClient) {
-            updateClient({ ...editingClient, ...clientFormData });
+        try {
+            if (editingClient) {
+                updateClient({ ...editingClient, ...clientFormData });
+            } else {
+                await addClient(clientFormData);
+            }
+            handleCloseModal();
+        } catch(err) {
+            console.error(err);
+            alert("Hubo un error al guardar.");
         }
-        handleCloseModal();
     };
     
     const handleDeleteClick = (clientId: string) => {
@@ -274,13 +274,13 @@ const Clients: React.FC<ClientsProps> = ({
         <>
             <div className="p-4 sm:p-6 md:p-8 text-white">
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Clientes</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Ventas</h1>
                     
                     <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
                         <div className="relative w-full sm:w-64">
                             <input
                                 type="text"
-                                placeholder="Buscar cliente..."
+                                placeholder="Buscar venta..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full bg-slate-800 text-white pl-10 pr-4 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -303,6 +303,9 @@ const Clients: React.FC<ClientsProps> = ({
                                 Recientes
                             </button>
                         </div>
+                        <button onClick={() => handleOpenModal(null as any)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto">
+                            <span>+ Nuevo Cliente</span>
+                        </button>
                     </div>
                 </div>
 
@@ -323,7 +326,7 @@ const Clients: React.FC<ClientsProps> = ({
                                 <tbody>
                                     <tr>
                                         <td colSpan={5} className="text-center p-8 text-slate-400">
-                                            {searchTerm ? 'No se encontraron clientes con ese criterio.' : 'No hay clientes con oportunidades ganadas.'}
+                                            {searchTerm ? 'No se encontraron clientes con ese criterio.' : 'No hay clientes registrados.'}
                                         </td>
                                     </tr>
                                 </tbody>
@@ -398,7 +401,7 @@ const Clients: React.FC<ClientsProps> = ({
                 <div className="md:hidden space-y-4">
                      {sortedActiveClients.length === 0 ? (
                         <div className="bg-slate-800 rounded-lg shadow-lg p-8 text-center text-slate-400">
-                            {searchTerm ? 'No se encontraron clientes con ese criterio.' : 'No hay clientes con oportunidades ganadas.'}
+                            {searchTerm ? 'No se encontraron clientes con ese criterio.' : 'No hay clientes registrados.'}
                         </div>
                      ) : (
                         sortedActiveClients.map(client => {
@@ -463,7 +466,7 @@ const Clients: React.FC<ClientsProps> = ({
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4">
                     <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-slate-700">
-                        <h2 className="text-2xl font-bold text-white mb-6">Editar Cliente</h2>
+                        <h2 className="text-2xl font-bold text-white mb-6">{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <input type="text" name="name" value={clientFormData.name} onChange={handleInputChange} placeholder="Nombre de la Institución" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                             <input type="text" name="contactPerson" value={clientFormData.contactPerson} onChange={handleInputChange} placeholder="Persona de Contacto" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
@@ -472,7 +475,7 @@ const Clients: React.FC<ClientsProps> = ({
                             <input type="text" name="address" value={clientFormData.address} onChange={handleInputChange} placeholder="Dirección" className="w-full bg-slate-700 text-white p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                             <div className="flex justify-end space-x-4 pt-4">
                                 <button type="button" onClick={handleCloseModal} className="py-2 px-4 bg-slate-600 hover:bg-slate-500 rounded-md text-white font-semibold transition-colors">Cancelar</button>
-                                <button type="submit" className="py-2 px-4 bg-cyan-500 hover:bg-cyan-600 rounded-md text-white font-semibold transition-colors">Actualizar</button>
+                                <button type="submit" className="py-2 px-4 bg-cyan-500 hover:bg-cyan-600 rounded-md text-white font-semibold transition-colors">{editingClient ? 'Actualizar' : 'Guardar'}</button>
                             </div>
                         </form>
                     </div>
@@ -514,4 +517,4 @@ const Clients: React.FC<ClientsProps> = ({
     );
 };
 
-export default Clients;
+export default Ventas;
